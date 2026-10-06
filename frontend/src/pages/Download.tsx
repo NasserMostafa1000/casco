@@ -6,7 +6,7 @@ import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { ThemeToggle } from '../components/ThemeToggle'
 import { t } from '../lib/i18n'
 
-const REPO = 'NasserMostafa1000/casco-downloads'
+const REPO = 'NasserMostafa1000/casco-studio'
 
 const FILES = {
   windows: 'CascoStudio-Windows-x64.exe',
@@ -17,6 +17,10 @@ const FILES = {
 type AssetName = (typeof FILES)[keyof typeof FILES]
 
 type Asset = { name: string; size: number; url: string }
+
+function releaseUrl(name: string) {
+  return `https://github.com/${REPO}/releases/latest/download/${name}`
+}
 
 function formatSize(bytes: number) {
   if (!bytes) return ''
@@ -77,14 +81,14 @@ export default function Download() {
             icon={<Monitor className="h-6 w-6" />}
             title="Windows"
             text={t('ويندوز 10 أو أحدث، 64-bit.')}
-            primary={{ label: t('تنزيل ويندوز'), href: find(FILES.windows)?.url, size: find(FILES.windows)?.size }}
+            primary={{ label: t('تنزيل ويندوز'), href: find(FILES.windows)?.url || releaseUrl(FILES.windows), size: find(FILES.windows)?.size }}
           />
           <Card
             icon={<Apple className="h-6 w-6" />}
             title="macOS"
             text={t('ماك Apple Silicon أو Intel. النسخة غير موقعة من أبل، ولو النظام منع الفتح اضغط يمين ثم Open.')}
-            primary={{ label: t('تنزيل ماك Apple Silicon'), href: find(FILES.macArm)?.url, size: find(FILES.macArm)?.size }}
-            secondary={{ label: t('تنزيل ماك Intel'), href: find(FILES.macIntel)?.url, size: find(FILES.macIntel)?.size }}
+            primary={{ label: t('تنزيل ماك Apple Silicon'), href: find(FILES.macArm)?.url || releaseUrl(FILES.macArm), size: find(FILES.macArm)?.size }}
+            secondary={{ label: t('تنزيل ماك Intel'), href: find(FILES.macIntel)?.url || releaseUrl(FILES.macIntel), size: find(FILES.macIntel)?.size }}
           />
         </div>
 
