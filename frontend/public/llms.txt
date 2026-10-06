@@ -8,6 +8,11 @@ Customers pay 18 USD or 180 USD once for their website code and the work of buil
 That amount is not paid again to keep the site online. The site stays up and working, but they cannot update the code with AI.
 Details: https://casco.studio/pricing
 
+## Download Casco Studio
+
+Official download page for Windows and Mac: https://casco.studio/download
+تنزيل Casco Studio للويندوز والماك: https://casco.studio/download
+
 ## Owner
 
 Nasser Mostafa El Barbary (ناصر مصطفي البربري) owns Casco.

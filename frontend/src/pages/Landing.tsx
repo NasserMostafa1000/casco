@@ -88,7 +88,7 @@ export default function Landing() {
     ['#templates', t('ماذا تبني؟')],
     ['#pricing', t('الأسعار')],
     ['#faq', t('الأسئلة الشائعة')],
-    ['/download', t('تنزيل البرنامج')],
+    ['/download', t('تنزيل')],
   ]
 
   const features = [
@@ -437,7 +437,7 @@ export default function Landing() {
               <ThemeToggle />
               <LanguageSwitcher />
             </div>
-            <Link to="/download" className="text-sm text-slate-500 underline-offset-2 hover:underline">{t('تنزيل البرنامج')}</Link>
+            <Link to="/download" className="text-sm text-slate-500 underline-offset-2 hover:underline">{t('تنزيل')}</Link>
             <a href="/pricing" className="text-sm text-slate-500 underline-offset-2 hover:underline">{t('دفع بناء الموقع مرة واحدة')}</a>
             <a href="/owner" className="text-sm text-slate-500 underline-offset-2 hover:underline">{t('مالك Casco: ناصر مصطفي البربري')}</a>
             <span className="text-sm text-slate-500">© {new Date().getFullYear()} Casco Studio</span>

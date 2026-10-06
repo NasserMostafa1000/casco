@@ -6,7 +6,7 @@ import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { ThemeToggle } from '../components/ThemeToggle'
 import { t } from '../lib/i18n'
 
-const REPO = 'NasserMostafa1000/casco-studio'
+const REPO = 'NasserMostafa1000/casco-downloads'
 
 const FILES = {
   windows: 'CascoStudio-Windows-x64.exe',
@@ -18,10 +18,6 @@ type AssetName = (typeof FILES)[keyof typeof FILES]
 
 type Asset = { name: string; size: number; url: string }
 
-function releaseUrl(name: string) {
-  return `https://github.com/${REPO}/releases/latest/download/${name}`
-}
-
 function formatSize(bytes: number) {
   if (!bytes) return ''
   const mb = bytes / (1024 * 1024)
@@ -32,6 +28,10 @@ export default function Download() {
   const [version, setVersion] = useState('')
   const [assets, setAssets] = useState<Asset[]>([])
   const [ready, setReady] = useState(false)
+
+  useEffect(() => {
+    document.title = `${t('تنزيل')} | Casco Studio`
+  }, [])
 
   useEffect(() => {
     const ctrl = new AbortController()
@@ -65,8 +65,8 @@ export default function Download() {
       </header>
 
       <main className="mx-auto max-w-5xl px-4 py-16 sm:px-6 sm:py-24">
-        <p className="text-sm font-semibold uppercase tracking-wider text-brand-600">{t('البرنامج')}</p>
-        <h1 className="mt-3 text-4xl font-extrabold tracking-tight text-ink sm:text-6xl">{t('نزّل Casco Studio')}</h1>
+        <h1 className="text-4xl font-extrabold tracking-tight text-ink sm:text-6xl">{t('تنزيل')}</h1>
+        <p className="mt-3 text-sm font-semibold uppercase tracking-wider text-brand-600">Casco Studio</p>
         <p className="mt-4 max-w-2xl text-lg text-slate-600">
           {t('برنامج الكمبيوتر فيه Casco Agent. سجّل الدخول بنفس حسابك على casco.studio.')}
         </p>
@@ -77,14 +77,14 @@ export default function Download() {
             icon={<Monitor className="h-6 w-6" />}
             title="Windows"
             text={t('ويندوز 10 أو أحدث، 64-bit.')}
-            primary={{ label: t('تنزيل ويندوز'), href: find(FILES.windows)?.url || releaseUrl(FILES.windows), size: find(FILES.windows)?.size }}
+            primary={{ label: t('تنزيل ويندوز'), href: find(FILES.windows)?.url, size: find(FILES.windows)?.size }}
           />
           <Card
             icon={<Apple className="h-6 w-6" />}
             title="macOS"
             text={t('ماك Apple Silicon أو Intel. النسخة غير موقعة من أبل، ولو النظام منع الفتح اضغط يمين ثم Open.')}
-            primary={{ label: t('تنزيل ماك Apple Silicon'), href: find(FILES.macArm)?.url || releaseUrl(FILES.macArm), size: find(FILES.macArm)?.size }}
-            secondary={{ label: t('تنزيل ماك Intel'), href: find(FILES.macIntel)?.url || releaseUrl(FILES.macIntel), size: find(FILES.macIntel)?.size }}
+            primary={{ label: t('تنزيل ماك Apple Silicon'), href: find(FILES.macArm)?.url, size: find(FILES.macArm)?.size }}
+            secondary={{ label: t('تنزيل ماك Intel'), href: find(FILES.macIntel)?.url, size: find(FILES.macIntel)?.size }}
           />
         </div>
 
@@ -106,8 +106,8 @@ function Card({
   icon: ReactNode
   title: string
   text: string
-  primary: { label: string; href: string; size?: number }
-  secondary?: { label: string; href: string; size?: number }
+  primary: { label: string; href?: string; size?: number }
+  secondary?: { label: string; href?: string; size?: number }
 }) {
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -120,7 +120,10 @@ function Card({
   )
 }
 
-function DownloadLink({ label, href, size, strong }: { label: string; href: string; size?: number; strong?: boolean }) {
+function DownloadLink({ label, href, size, strong }: { label: string; href?: string; size?: number; strong?: boolean }) {
+  if (!href) {
+    return <p className={strong ? 'mt-6 text-sm text-slate-500' : 'mt-3 text-sm text-slate-500'}>{t('الملف لسه بيتبني ورابط التنزيل هيظهر هنا لما يخلص.')}</p>
+  }
   return (
     <a
       href={href}

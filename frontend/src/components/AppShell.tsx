@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { Link, NavLink, Navigate, Outlet, useNavigate } from 'react-router-dom'
-import { CreditCard, LayoutGrid, LogOut, Plus, Settings, Shield, Sparkles, Zap } from 'lucide-react'
+import { CreditCard, Download, LayoutGrid, LogOut, Plus, Settings, Shield, Sparkles, Zap } from 'lucide-react'
 import { useAuth } from '../lib/auth'
 import { num, setLang, t } from '../lib/i18n'
 import { LanguageSwitcher, Popover } from './LanguageSwitcher'
@@ -59,6 +59,7 @@ export function AppShell() {
     { to: '/app', end: true, icon: LayoutGrid, label: t('مواقعي') },
     { to: '/app/billing', end: false, icon: CreditCard, label: t('الاشتراك والنقاط') },
     { to: '/app/settings', end: false, icon: Settings, label: t('الإعدادات') },
+    { to: '/download', end: false, icon: Download, label: t('تنزيل') },
     ...(isAdmin ? [{ to: '/app/admin', end: false, icon: Shield, label: t('لوحة الإدارة') }] : []),
   ]
   const signOut = () => {

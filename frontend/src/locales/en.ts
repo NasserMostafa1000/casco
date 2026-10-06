@@ -757,6 +757,7 @@ const en: Record<string, string> = {
   "السماح": "Allow",
   "تم توصيل Casco Studio. تقدر تقفل الصفحة وترجع للبرنامج.": "Casco Studio is connected. You can close this page and return to the app.",
   "تم رفض طلب الدخول.": "The sign-in request was denied.",
+  "تنزيل": "Download",
   "تنزيل البرنامج": "Download the app",
   "الموقع": "Website",
   "البرنامج": "Desktop app",
@@ -769,6 +770,7 @@ const en: Record<string, string> = {
   "تنزيل ماك Apple Silicon": "Download for Mac Apple Silicon",
   "تنزيل ماك Intel": "Download for Mac Intel",
   "أول نسخة بتتبني على GitHub. زرار التنزيل هيشتغل لما البناء يخلص.": "The first build is running on GitHub. The download buttons work when that build finishes.",
+  "الملف لسه بيتبني ورابط التنزيل هيظهر هنا لما يخلص.": "This file is still being built. The download link will show up here when it is ready.",
 }
 
 export default en
