@@ -88,6 +88,7 @@ export default function Landing() {
     ['#templates', t('ماذا تبني؟')],
     ['#pricing', t('الأسعار')],
     ['#faq', t('الأسئلة الشائعة')],
+    ['/download', t('تنزيل البرنامج')],
   ]
 
   const features = [
@@ -123,11 +124,17 @@ export default function Landing() {
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-4 sm:px-6">
           <Logo />
           <nav className="ms-8 hidden items-center gap-1 lg:flex">
-            {links.map(([href, label]) => (
-              <a key={href} href={href} className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:text-slate-900">
-                {label}
-              </a>
-            ))}
+            {links.map(([href, label]) =>
+              href.startsWith('/') ? (
+                <Link key={href} to={href} className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:text-slate-900">
+                  {label}
+                </Link>
+              ) : (
+                <a key={href} href={href} className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:text-slate-900">
+                  {label}
+                </a>
+              ),
+            )}
           </nav>
           <div className="ms-auto flex items-center gap-2">
             <ThemeToggle />
@@ -153,11 +160,17 @@ export default function Landing() {
         </div>
         {menu && (
           <div className="animate-fade-up border-t border-slate-100 px-4 pb-5 pt-2 lg:hidden">
-            {links.map(([href, label]) => (
-              <a key={href} href={href} onClick={() => setMenu(false)} className="block rounded-xl px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50">
-                {label}
-              </a>
-            ))}
+            {links.map(([href, label]) =>
+              href.startsWith('/') ? (
+                <Link key={href} to={href} onClick={() => setMenu(false)} className="block rounded-xl px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50">
+                  {label}
+                </Link>
+              ) : (
+                <a key={href} href={href} onClick={() => setMenu(false)} className="block rounded-xl px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50">
+                  {label}
+                </a>
+              ),
+            )}
             <div className="mt-2 flex items-center justify-between border-t border-slate-100 pt-3">
               <div className="flex items-center gap-1">
                 <ThemeToggle />
@@ -424,6 +437,7 @@ export default function Landing() {
               <ThemeToggle />
               <LanguageSwitcher />
             </div>
+            <Link to="/download" className="text-sm text-slate-500 underline-offset-2 hover:underline">{t('تنزيل البرنامج')}</Link>
             <a href="/pricing" className="text-sm text-slate-500 underline-offset-2 hover:underline">{t('دفع بناء الموقع مرة واحدة')}</a>
             <a href="/owner" className="text-sm text-slate-500 underline-offset-2 hover:underline">{t('مالك Casco: ناصر مصطفي البربري')}</a>
             <span className="text-sm text-slate-500">© {new Date().getFullYear()} Casco Studio</span>

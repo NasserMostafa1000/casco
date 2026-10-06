@@ -7,6 +7,7 @@ import { Spinner } from './components/ui'
 import Dashboard from './pages/Dashboard'
 import Settings from './pages/Settings'
 import Landing from './pages/Landing'
+import Download from './pages/Download'
 import { Login, Register } from './pages/Auth'
 import { DesktopConnect } from './pages/DesktopConnect'
 import NewProject from './pages/NewProject'
@@ -57,6 +58,7 @@ export default function App() {
       <TikTokPageView />
       <Routes>
       <Route path="/" element={<Landing />} />
+      <Route path="/download" element={<Download />} />
       <Route path="/login" element={<Login />} />
       <Route path="/desktop" element={<DesktopConnect />} />
       <Route path="/register" element={<Register />} />

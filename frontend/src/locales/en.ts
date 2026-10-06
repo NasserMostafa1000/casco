@@ -757,6 +757,18 @@ const en: Record<string, string> = {
   "السماح": "Allow",
   "تم توصيل Casco Studio. تقدر تقفل الصفحة وترجع للبرنامج.": "Casco Studio is connected. You can close this page and return to the app.",
   "تم رفض طلب الدخول.": "The sign-in request was denied.",
+  "تنزيل البرنامج": "Download the app",
+  "الموقع": "Website",
+  "البرنامج": "Desktop app",
+  "نزّل Casco Studio": "Download Casco Studio",
+  "برنامج الكمبيوتر فيه Casco Agent. سجّل الدخول بنفس حسابك على casco.studio.": "The desktop app includes Casco Agent. Sign in with the same casco.studio account.",
+  "آخر نسخة": "Latest build",
+  "ويندوز 10 أو أحدث، 64-bit.": "Windows 10 or later, 64-bit.",
+  "تنزيل ويندوز": "Download for Windows",
+  "ماك Apple Silicon أو Intel. النسخة غير موقعة من أبل، ولو النظام منع الفتح اضغط يمين ثم Open.": "Mac with Apple Silicon or Intel. The build is not signed by Apple. If macOS blocks it, right-click and choose Open.",
+  "تنزيل ماك Apple Silicon": "Download for Mac Apple Silicon",
+  "تنزيل ماك Intel": "Download for Mac Intel",
+  "أول نسخة بتتبني على GitHub. زرار التنزيل هيشتغل لما البناء يخلص.": "The first build is running on GitHub. The download buttons work when that build finishes.",
 }
 
 export default en
