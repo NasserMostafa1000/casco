@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{BRAND}}</title>
+<meta name="description" content="{{DESCRIPTION}}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<style type="text/tailwindcss">
+  @theme { --color-primary: #895cdb; --color-primary-dark: #34187c; --color-accent: #b388ff; --font-sans: "Cairo", system-ui, sans-serif; }
+</style>
+</head>
+<body data-page="home" class="bg-slate-50 text-slate-800 font-sans antialiased min-h-screen flex flex-col">
+
+<!-- SECTION: header -->
+<header class="sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-slate-200">
+  <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
+    <a href="index.html" class="text-xl font-extrabold text-primary-dark">🎓 {{BRAND}}</a>
+    <nav class="hidden md:flex items-center gap-6 text-sm font-semibold">
+      <a href="index.html" class="text-primary">الرئيسية</a>
+      <a href="courses.html" class="hover:text-primary">الكورسات</a>
+      <a href="my-courses.html" class="hover:text-primary">كورساتي</a>
+    </nav>
+    <div data-auth-nav class="hidden md:flex items-center gap-3 text-sm font-semibold"></div>
+    <button data-menu-btn class="md:hidden p-2 rounded-lg hover:bg-slate-100" aria-label="القائمة" aria-expanded="false"><svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  </div>
+  <div data-mobile-menu class="hidden md:hidden border-t border-slate-200 bg-white px-4 py-3 flex-col gap-3 font-semibold">
+    <a href="index.html">الرئيسية</a><a href="courses.html">الكورسات</a><a href="my-courses.html">كورساتي</a>
+    <div data-auth-nav class="flex flex-wrap items-center gap-3 pt-3 border-t border-slate-200 text-sm"></div>
+  </div>
+</header>
+
+<main class="flex-1">
+<!-- SECTION: hero -->
+<section class="relative overflow-hidden bg-gradient-to-br from-primary-dark via-primary to-accent text-white">
+  <div class="max-w-6xl mx-auto px-4 py-20 md:py-24 grid md:grid-cols-2 gap-10 items-center">
+    <div>
+      <span class="inline-block bg-white/15 px-3 py-1 rounded-full text-sm mb-4">✨ تعلّم بلا حدود</span>
+      <h1 class="text-4xl md:text-5xl font-extrabold leading-tight mb-5">طوّر مهاراتك مع {{BRAND}}</h1>
+      <p class="text-lg text-white/85 mb-8">{{DESCRIPTION}}</p>
+      <div class="flex flex-wrap gap-3">
+        <a href="courses.html" class="bg-white text-primary-dark font-bold px-6 py-3 rounded-xl shadow-lg hover:bg-slate-100">تصفح الكورسات</a>
+        <a href="register.html" class="border border-white/60 font-bold px-6 py-3 rounded-xl hover:bg-white/10">أنشئ حساباً مجاناً</a>
+      </div>
+    </div>
+    <img src="{{STOCK}}/800x500/students-learning" alt="طلاب يتعلمون" class="rounded-2xl shadow-2xl w-full object-cover aspect-[8/5]">
+  </div>
+</section>
+
+<!-- SECTION: featured-courses (filled by assets/app.js) -->
+<section class="max-w-6xl mx-auto px-4 py-16">
+  <div class="flex items-end justify-between mb-8 gap-4">
+    <div>
+      <h2 class="text-3xl font-extrabold text-primary-dark mb-2">أحدث الكورسات</h2>
+      <p class="text-slate-500">اختر الكورس المناسب وابدأ التعلم اليوم</p>
+    </div>
+    <a href="courses.html" class="text-primary font-bold hover:underline whitespace-nowrap">عرض الكل ←</a>
+  </div>
+  <div id="featured" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+</section>
+
+<!-- SECTION: why-us -->
+<section class="bg-white py-16">
+  <div class="max-w-6xl mx-auto px-4">
+    <h2 class="text-3xl font-extrabold text-primary-dark text-center mb-12">لماذا تتعلم معنا؟</h2>
+    <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 text-center">
+      <div class="rounded-2xl bg-slate-50 p-6"><div class="text-4xl mb-3">👨‍🏫</div><h3 class="font-bold mb-2">مدربون خبراء</h3><p class="text-sm text-slate-500">محتوى يقدمه متخصصون بخبرة عملية.</p></div>
+      <div class="rounded-2xl bg-slate-50 p-6"><div class="text-4xl mb-3">⏰</div><h3 class="font-bold mb-2">تعلّم في أي وقت</h3><p class="text-sm text-slate-500">شاهد الدروس بالسرعة التي تناسبك.</p></div>
+      <div class="rounded-2xl bg-slate-50 p-6"><div class="text-4xl mb-3">📱</div><h3 class="font-bold mb-2">من أي جهاز</h3><p class="text-sm text-slate-500">من الجوال أو الكمبيوتر بكل سهولة.</p></div>
+      <div class="rounded-2xl bg-slate-50 p-6"><div class="text-4xl mb-3">🎯</div><h3 class="font-bold mb-2">محتوى عملي</h3><p class="text-sm text-slate-500">دروس مركزة تركز على التطبيق.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION: cta -->
+<section class="max-w-6xl mx-auto px-4 py-16">
+  <div class="rounded-2xl bg-gradient-to-l from-primary to-primary-dark text-white p-10 md:p-14 text-center shadow-xl">
+    <h2 class="text-3xl font-extrabold mb-3">جاهز لبدء رحلتك التعليمية؟</h2>
+    <p class="text-white/85 mb-8">انضم الآن إلى آلاف الطلاب وابدأ التعلم اليوم.</p>
+    <a href="register.html" class="inline-block bg-white text-primary-dark font-bold px-8 py-3 rounded-xl hover:bg-slate-100">سجّل الآن</a>
+  </div>
+</section>
+</main>
+
+<!-- SECTION: footer -->
+<footer class="bg-primary-dark text-white/70 py-8">
+  <div class="max-w-6xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-3 text-sm">
+    <span class="font-bold text-white">{{BRAND}}</span>
+    <span>© {{YEAR}} {{BRAND}}. جميع الحقوق محفوظة.</span>
+  </div>
+</footer>
+
+<script src="assets/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+{
+  "key": "ads",
+  "name": "منصة إعلانات مبوبة",
+  "description": "سوق إلكتروني للإعلانات المبوبة يتيح للمستخدمين نشر إعلاناتهم والبحث فيها",
+  "plan": "pro",
+  "modules": ["forms", "ads"],
+  "keywords": ["إعلانات", "مبوبة", "بيع", "شراء", "سوق", "حراج", "عقارات", "سيارات", "مستعمل", "classified", "classifieds", "marketplace", "listings", "buy and sell", "used cars", "वर्गीकृत", "विज्ञापन"]
+}

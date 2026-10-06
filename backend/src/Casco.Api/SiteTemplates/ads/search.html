@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>البحث في الإعلانات | {{BRAND}}</title>
+<meta name="description" content="{{DESCRIPTION}}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<style type="text/tailwindcss">
+  @theme { --color-primary: #f97316; --color-primary-dark: #9a3412; --color-accent: #f59e0b; --font-sans: "Cairo", system-ui, sans-serif; }
+</style>
+</head>
+<body data-page="search" class="bg-slate-50 text-slate-800 font-sans antialiased min-h-screen flex flex-col">
+
+<!-- SECTION: header -->
+<header class="sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-slate-200">
+  <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
+    <a href="index.html" class="text-xl font-extrabold text-primary-dark">🛒 {{BRAND}}</a>
+    <nav class="hidden md:flex items-center gap-6 text-sm font-semibold">
+      <a href="index.html" class="hover:text-primary">الرئيسية</a>
+      <a href="search.html" class="text-primary">كل الإعلانات</a>
+      <a href="my-ads.html" class="hover:text-primary">إعلاناتي</a>
+    </nav>
+    <div class="hidden md:flex items-center gap-4 text-sm font-semibold">
+      <div data-auth-nav class="flex items-center gap-3"></div>
+      <a href="post.html" class="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-xl">+ أضف إعلان</a>
+    </div>
+    <button data-menu-btn class="md:hidden p-2 rounded-lg hover:bg-slate-100" aria-label="القائمة" aria-expanded="false"><svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  </div>
+  <div data-mobile-menu class="hidden md:hidden border-t border-slate-200 bg-white px-4 py-3 flex-col gap-3 font-semibold">
+    <a href="index.html">الرئيسية</a><a href="search.html">كل الإعلانات</a><a href="my-ads.html">إعلاناتي</a><a href="post.html" class="text-primary">+ أضف إعلان</a>
+    <div data-auth-nav class="flex flex-wrap items-center gap-3 pt-3 border-t border-slate-200 text-sm"></div>
+  </div>
+</header>
+
+<main class="flex-1 max-w-6xl w-full mx-auto px-4 py-10 grid lg:grid-cols-4 gap-8 items-start">
+  <!-- SECTION: filters sidebar -->
+  <aside class="bg-white rounded-2xl shadow-sm p-5 lg:sticky lg:top-24">
+    <h2 class="font-bold text-lg mb-4">تصفية النتائج</h2>
+    <form id="filters" action="search.html" method="get" class="space-y-4">
+      <div><label for="q" class="block text-sm font-semibold mb-1">كلمة البحث</label><input id="q" name="q" type="search" placeholder="ابحث..." class="w-full border border-slate-300 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary"></div>
+      <div><label for="category" class="block text-sm font-semibold mb-1">التصنيف</label><select id="category" name="category" data-fill="categories" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary"><option value="">كل التصنيفات</option></select></div>
+      <div><label for="city" class="block text-sm font-semibold mb-1">المدينة</label><select id="city" name="city" data-fill="cities" class="w-full border border-slate-300 rounded-xl px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary"><option value="">كل المدن</option></select></div>
+      <button type="submit" class="w-full bg-primary hover:bg-primary-dark text-white font-bold py-3 rounded-xl">تطبيق</button>
+      <a href="search.html" class="block text-center text-sm text-slate-500 hover:text-primary">مسح الفلاتر</a>
+    </form>
+  </aside>
+
+  <!-- SECTION: results (filled by assets/app.js) -->
+  <section class="lg:col-span-3">
+    <div class="flex items-center justify-between mb-6">
+      <h1 class="text-2xl font-extrabold text-primary-dark">الإعلانات</h1>
+      <span id="count" class="text-sm text-slate-500" aria-live="polite"></span>
+    </div>
+    <div id="results" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6"></div>
+    <nav id="pager" class="flex flex-wrap justify-center gap-2 mt-10" aria-label="الصفحات"></nav>
+  </section>
+</main>
+
+<!-- SECTION: footer -->
+<footer class="bg-slate-900 text-slate-400 py-8">
+  <div class="max-w-6xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-3 text-sm">
+    <span class="font-bold text-white">{{BRAND}}</span>
+    <span>© {{YEAR}} {{BRAND}}. جميع الحقوق محفوظة.</span>
+  </div>
+</footer>
+
+<script src="assets/app.js"></script>
+</body>
+</html>

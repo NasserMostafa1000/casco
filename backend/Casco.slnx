@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Casco.Api/Casco.Api.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Casco.Tests/Casco.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{BRAND}}</title>
+<meta name="description" content="{{DESCRIPTION}}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<style type="text/tailwindcss">
+  @theme { --color-primary: #db2777; --color-primary-dark: #831843; --color-accent: #f59e0b; --font-sans: "Cairo", system-ui, sans-serif; }
+</style>
+<style type="text/tailwindcss">
+  html { scroll-behavior: smooth; }
+  section { scroll-margin-top: 4.5rem; }
+  @layer components {
+    .wrap { @apply max-w-6xl mx-auto px-4; }
+    .h2 { @apply text-3xl font-extrabold text-primary-dark mb-3; }
+    .lbl { @apply block text-sm font-semibold mb-1; }
+    .inp { @apply w-full border border-slate-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary bg-white; }
+    .btn { @apply bg-primary text-white font-bold px-5 py-2.5 rounded-xl hover:bg-primary-dark disabled:opacity-50 transition; }
+    .chip { @apply px-4 py-1.5 rounded-full border border-slate-300 text-sm font-semibold hover:border-primary; }
+    .chip-on { @apply bg-primary text-white border-primary; }
+  }
+</style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased">
+
+<!-- SECTION: header -->
+<header class="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-slate-200">
+  <div class="wrap h-16 flex items-center justify-between gap-4">
+    <a href="#hero" class="text-xl font-extrabold text-primary-dark">{{BRAND}}</a>
+    <nav class="hidden md:flex items-center gap-6 text-sm font-semibold">
+      <a href="#products" class="hover:text-primary">المنتجات</a>
+      <a href="#about" class="hover:text-primary">من نحن</a>
+      <a href="#contact" class="hover:text-primary">تواصل معنا</a>
+    </nav>
+    <button id="cartBtn" class="relative flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-xl font-bold hover:bg-primary-dark" aria-label="السلة">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13 5.4 5M7 13l-2.3 2.3c-.6.6-.2 1.7.7 1.7H17m0 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm-8 2a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z"/></svg>
+      <span>السلة</span>
+      <span data-casco-cart-count class="bg-white text-primary-dark rounded-full min-w-6 h-6 px-1.5 grid place-items-center text-xs">0</span>
+    </button>
+  </div>
+</header>
+
+<!-- SECTION: hero -->
+<section id="hero" class="bg-gradient-to-br from-primary-dark via-primary to-accent text-white">
+  <div class="wrap py-16 md:py-24 text-center">
+    <h1 class="text-4xl md:text-5xl font-extrabold leading-tight mb-4">{{BRAND}}</h1>
+    <p class="text-lg text-white/90 max-w-2xl mx-auto mb-8">{{DESCRIPTION}}</p>
+    <a href="#products" class="inline-block bg-white text-primary-dark font-bold px-7 py-3 rounded-xl shadow-lg hover:bg-slate-100">تسوّق الآن</a>
+    <div class="mt-10 flex flex-wrap justify-center gap-6 text-sm text-white/90">
+      <span>🚚 توصيل سريع</span><span>💵 الدفع عند الاستلام</span><span>💬 طلب عبر واتساب</span>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION: products -->
+<section id="products" class="wrap py-16">
+  <div class="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
+    <div>
+      <h2 class="h2">منتجاتنا</h2>
+      <p class="text-slate-500">اختر ما يعجبك وأضفه إلى السلة</p>
+    </div>
+    <input id="search" type="search" class="inp md:max-w-xs" placeholder="ابحث عن منتج…">
+  </div>
+  <div id="categories" class="flex flex-wrap gap-2 mb-6"></div>
+  <div id="grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+    <p class="col-span-full text-center text-slate-500 py-10">جاري تحميل المنتجات…</p>
+  </div>
+</section>
+
+<!-- SECTION: about -->
+<section id="about" class="bg-white py-16">
+  <div class="wrap grid md:grid-cols-2 gap-10 items-center">
+    <img src="{{STOCK}}/800x600/shop-interior" alt="{{BRAND}}" class="rounded-2xl shadow-lg w-full object-cover">
+    <div>
+      <h2 class="h2">من نحن</h2>
+      <p class="text-slate-600 leading-8">في {{BRAND}} نختار منتجاتنا بعناية ونوصلها لك بأفضل جودة وسعر. خدمة العملاء متاحة دائماً للرد على استفساراتك.</p>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION: contact -->
+<section id="contact" class="wrap py-16">
+  <div class="max-w-xl mx-auto bg-white rounded-2xl p-6 shadow-sm">
+    <h2 class="h2 text-center">تواصل معنا</h2>
+    <form data-casco-form="contact" class="space-y-4">
+      <div><label class="lbl" for="c-name">الاسم</label><input id="c-name" name="name" required class="inp"></div>
+      <div><label class="lbl" for="c-phone">رقم الهاتف</label><input id="c-phone" name="phone" type="tel" required class="inp"></div>
+      <div><label class="lbl" for="c-msg">رسالتك</label><textarea id="c-msg" name="message" rows="4" required class="inp"></textarea></div>
+      <button class="btn w-full" type="submit">إرسال</button>
+      <p data-casco-success hidden class="text-center text-green-700 font-semibold">تم إرسال رسالتك، سنتواصل معك قريباً.</p>
+    </form>
+  </div>
+</section>
+
+<!-- SECTION: footer -->
+<footer class="bg-primary-dark text-white/80 py-8 text-center text-sm">© {{YEAR}} {{BRAND}}. جميع الحقوق محفوظة.</footer>
+
+<!-- SECTION: cart drawer -->
+<div id="drawer" class="fixed inset-0 z-50 hidden">
+  <div data-close class="absolute inset-0 bg-black/40"></div>
+  <aside class="absolute top-0 bottom-0 left-0 w-full max-w-md bg-white shadow-2xl flex flex-col" role="dialog" aria-label="سلة المشتريات">
+    <div class="flex items-center justify-between p-4 border-b">
+      <h3 class="text-lg font-extrabold">سلة المشتريات</h3>
+      <button data-close class="p-2 rounded-lg hover:bg-slate-100" aria-label="إغلاق">✕</button>
+    </div>
+    <div id="drawerBody" class="flex-1 overflow-y-auto p-4"></div>
+  </aside>
+</div>
+
+<script src="assets/app.js"></script>
+</body>
+</html>

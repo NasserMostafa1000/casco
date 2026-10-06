@@ -1,0 +1,114 @@
+# Server 2: PostgreSQL + nightly backups.
+services:
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_DB: casco
+      POSTGRES_USER: casco
+    command: >
+      postgres
+      -c ssl=on
+      -c ssl_cert_file=/certs/server.crt
+      -c ssl_key_file=/certs/server.key
+      -c hba_file=/etc/postgresql/pg_hba.conf
+      -c shared_buffers=1GB
+      -c effective_cache_size=4GB
+      -c max_connections=100
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - ./certs:/certs:ro
+      - ./pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U casco -d casco"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+  backup:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    depends_on:
+      - db
+    env_file: .env
+    environment:
+      PGHOST: db
+      PGUSER: casco
+      PGDATABASE: casco
+    volumes:
+      - ./backups:/backups
+    entrypoint: >
+      /bin/sh -c 'export PGPASSWORD="$$POSTGRES_PASSWORD";
+      while true; do
+        sleep 60;
+        pg_dump -Fc > /backups/casco-$$(date +%F-%H%M).dump && echo "backup ok";
+        find /backups -name "*.dump" -mtime +14 -delete;
+        sleep 86340;
+      done'
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+  # Sends this server's resources, Postgres status and backup age to the API every minute (alerts are e-mailed from server 1).
+  monitor:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    depends_on:
+      - db
+    env_file: .env
+    volumes:
+      - ./monitor.sh:/monitor.sh:ro
+      - ./backups:/backups:ro
+      - pgdata:/var/lib/postgresql:ro
+    entrypoint: ["/bin/sh", "/monitor.sh"]
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "3" }
+
+  # Standby API. The image is built on server 1 and loaded here (deploy.ps1), so this machine does not compile.
+  # Background jobs stay off until failover marks this server active in cluster_state.
+  api:
+    image: casco-api:latest
+    pull_policy: missing
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env.api
+    volumes:
+      - ./data:/app/data
+    expose:
+      - "8080"
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    env_file: .env.api
+    volumes:
+      - ../server1/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/etc/caddy/certs:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

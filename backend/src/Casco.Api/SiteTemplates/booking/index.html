@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{BRAND}}</title>
+<meta name="description" content="{{DESCRIPTION}}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<style type="text/tailwindcss">
+  @theme { --color-primary: #0891b2; --color-primary-dark: #164e63; --color-accent: #8b5cf6; --font-sans: "Cairo", system-ui, sans-serif; }
+</style>
+<style type="text/tailwindcss">
+  html { scroll-behavior: smooth; }
+  section { scroll-margin-top: 4.5rem; }
+  @layer components {
+    .wrap { @apply max-w-6xl mx-auto px-4; }
+    .h2 { @apply text-3xl font-extrabold text-primary-dark mb-3; }
+    .lbl { @apply block text-sm font-semibold mb-1; }
+    .inp { @apply w-full border border-slate-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary bg-white; }
+    .btn { @apply bg-primary text-white font-bold px-5 py-2.5 rounded-xl hover:bg-primary-dark disabled:opacity-50 transition; }
+    .slot { @apply border border-slate-300 rounded-xl py-2 text-sm font-semibold hover:border-primary disabled:opacity-40 disabled:line-through; }
+    .slot-on { @apply bg-primary text-white border-primary; }
+    .svc { @apply text-right bg-white border-2 border-transparent rounded-2xl p-4 shadow-sm hover:shadow-md transition; }
+    .svc-on { @apply border-primary; }
+  }
+</style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased">
+
+<!-- SECTION: header -->
+<header class="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-slate-200">
+  <div class="wrap h-16 flex items-center justify-between">
+    <a href="#hero" class="text-xl font-extrabold text-primary-dark">{{BRAND}}</a>
+    <nav class="flex items-center gap-5 text-sm font-semibold">
+      <a href="#services" class="hidden md:inline hover:text-primary">خدماتنا</a>
+      <a href="#about" class="hidden md:inline hover:text-primary">من نحن</a>
+      <a href="#book" class="bg-primary text-white px-4 py-2 rounded-xl hover:bg-primary-dark">احجز موعدك</a>
+    </nav>
+  </div>
+</header>
+
+<!-- SECTION: hero -->
+<section id="hero" class="bg-gradient-to-br from-primary-dark via-primary to-accent text-white">
+  <div class="wrap py-16 md:py-24 grid md:grid-cols-2 gap-10 items-center">
+    <div>
+      <h1 class="text-4xl md:text-5xl font-extrabold leading-tight mb-4">{{BRAND}}</h1>
+      <p class="text-lg text-white/90 mb-8">{{DESCRIPTION}}</p>
+      <a href="#book" class="inline-block bg-white text-primary-dark font-bold px-7 py-3 rounded-xl shadow-lg hover:bg-slate-100">احجز الآن في أقل من دقيقة</a>
+    </div>
+    <img src="{{STOCK}}/800x600/clinic-reception" alt="{{BRAND}}" class="rounded-2xl shadow-2xl w-full object-cover">
+  </div>
+</section>
+
+<!-- SECTION: book -->
+<section id="book" class="wrap py-16">
+  <h2 class="h2 text-center">احجز موعدك</h2>
+  <p class="text-center text-slate-500 mb-8">اختر الخدمة ثم اليوم والوقت المناسب لك</p>
+  <div id="services" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+    <p class="col-span-full text-center text-slate-500">جاري تحميل الخدمات…</p>
+  </div>
+  <div id="step2" class="hidden bg-white rounded-2xl shadow-sm p-6 max-w-3xl mx-auto">
+    <div class="grid md:grid-cols-2 gap-6">
+      <div>
+        <label class="lbl" for="date">اليوم</label>
+        <input id="date" type="date" class="inp mb-4">
+        <div id="slots" class="grid grid-cols-3 gap-2"></div>
+      </div>
+      <form id="bookForm" class="space-y-3">
+        <input type="text" name="_hp" style="display:none" tabindex="-1" autocomplete="off">
+        <div><label class="lbl" for="b-name">الاسم</label><input id="b-name" name="customerName" required class="inp"></div>
+        <div><label class="lbl" for="b-phone">رقم الهاتف</label><input id="b-phone" name="phone" type="tel" required class="inp"></div>
+        <div><label class="lbl" for="b-notes">ملاحظات (اختياري)</label><textarea id="b-notes" name="notes" rows="3" class="inp"></textarea></div>
+        <p id="picked" class="text-sm text-slate-500">اختر وقتاً من المواعيد المتاحة</p>
+        <button id="bookBtn" class="btn w-full py-3" type="submit" disabled>تأكيد الحجز</button>
+      </form>
+    </div>
+  </div>
+  <div id="done" class="hidden max-w-lg mx-auto bg-white rounded-2xl shadow-sm p-8 text-center space-y-4"></div>
+</section>
+
+<!-- SECTION: about -->
+<section id="about" class="bg-white py-16">
+  <div class="wrap max-w-3xl text-center">
+    <h2 class="h2">من نحن</h2>
+    <p class="text-slate-600 leading-8">في {{BRAND}} نهتم براحتك ووقتك. احجز موعدك أونلاين واحضر في الوقت المحدد بدون انتظار.</p>
+  </div>
+</section>
+
+<!-- SECTION: contact -->
+<section id="contact" class="wrap py-16">
+  <div class="max-w-xl mx-auto bg-white rounded-2xl p-6 shadow-sm">
+    <h2 class="h2 text-center">تواصل معنا</h2>
+    <form data-casco-form="contact" class="space-y-4">
+      <div><label class="lbl" for="c-name">الاسم</label><input id="c-name" name="name" required class="inp"></div>
+      <div><label class="lbl" for="c-phone">رقم الهاتف</label><input id="c-phone" name="phone" type="tel" required class="inp"></div>
+      <div><label class="lbl" for="c-msg">رسالتك</label><textarea id="c-msg" name="message" rows="4" required class="inp"></textarea></div>
+      <button class="btn w-full" type="submit">إرسال</button>
+      <p data-casco-success hidden class="text-center text-green-700 font-semibold">تم إرسال رسالتك، سنتواصل معك قريباً.</p>
+    </form>
+  </div>
+</section>
+
+<!-- SECTION: footer -->
+<footer class="bg-primary-dark text-white/80 py-8 text-center text-sm">© {{YEAR}} {{BRAND}}. جميع الحقوق محفوظة.</footer>
+
+<script src="assets/app.js"></script>
+</body>
+</html>

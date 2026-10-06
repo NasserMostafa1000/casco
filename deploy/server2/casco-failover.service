@@ -1,0 +1,13 @@
+[Unit]
+Description=Casco failover watchdog
+After=docker.service
+Requires=docker.service
+
+[Service]
+WorkingDirectory=/opt/casco/deploy/server2
+ExecStart=/usr/bin/python3 /opt/casco/deploy/server2/failover.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

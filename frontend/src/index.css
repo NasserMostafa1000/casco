@@ -1,0 +1,175 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", "IBM Plex Sans Arabic", "Noto Sans Devanagari", ui-sans-serif, system-ui, sans-serif;
+  --color-brand-50: #eef2ff;
+  --color-brand-100: #e0e7ff;
+  --color-brand-200: #c7d2fe;
+  --color-brand-300: #a5b4fc;
+  --color-brand-400: #818cf8;
+  --color-brand-500: #6366f1;
+  --color-brand-600: #4f46e5;
+  --color-brand-700: #4338ca;
+  --color-brand-800: #3730a3;
+  --color-brand-900: #1e1b4b;
+  --color-ink: #0b0d1a;
+  --animate-fade-up: fade-up 0.6s ease-out both;
+  --animate-float: float 8s ease-in-out infinite;
+
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes float {
+    0%,
+    100% {
+      transform: translate(0, 0) scale(1);
+    }
+    50% {
+      transform: translate(20px, -30px) scale(1.08);
+    }
+  }
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  @apply bg-white text-slate-900 antialiased;
+  font-feature-settings: "cv11", "ss01";
+}
+
+/* Arabic and Devanagari need more line height than Latin text. */
+html[lang="ar"] body,
+html[lang="hi"] body {
+  line-height: 1.7;
+}
+
+.text-gradient {
+  @apply bg-gradient-to-r from-brand-600 via-violet-600 to-fuchsia-500 bg-clip-text text-transparent;
+}
+
+.bg-grid {
+  background-image:
+    linear-gradient(to right, rgb(15 23 42 / 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(15 23 42 / 0.05) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  @apply rounded-full bg-slate-300;
+}
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Dark is the default. Override utilities, not the color tokens, so text stays light and borders stay visible. */
+html.dark {
+  color-scheme: dark;
+  background: #181818;
+  color: #ececec;
+}
+html.dark body {
+  background: #181818;
+  color: #ececec;
+}
+html.dark .bg-white { background-color: #1e1e1e; }
+html.dark .bg-white\/70 { background-color: rgb(30 30 30 / 0.7); }
+html.dark .bg-white\/80 { background-color: rgb(30 30 30 / 0.8); }
+html.dark .bg-white\/85 { background-color: rgb(30 30 30 / 0.85); }
+html.dark .bg-white\/90 { background-color: rgb(30 30 30 / 0.9); }
+html.dark .bg-white\/95 { background-color: rgb(30 30 30 / 0.95); }
+html.dark .bg-slate-50,
+html.dark .bg-slate-50\/50,
+html.dark .bg-slate-50\/40 { background-color: #181818; }
+html.dark .bg-slate-100 { background-color: #2a2a2a; }
+html.dark .bg-slate-200,
+html.dark .bg-slate-200\/50 { background-color: #333333; }
+/* A white button or chip keeps a light face and dark label. */
+html.dark .bg-white.text-ink,
+html.dark .bg-white.text-brand-700,
+html.dark .bg-white.text-brand-800 { background-color: #ffffff; color: #0b0d1a; }
+html.dark .bg-ink .bg-white { background-color: #ffffff; }
+html.dark .bg-ink .text-ink { color: #0b0d1a; }
+html.dark .text-ink,
+html.dark .text-slate-900,
+html.dark .text-slate-800 { color: #f4f4f5; }
+html.dark .text-slate-700,
+html.dark .text-slate-600 { color: #e4e4e7; }
+html.dark .text-slate-500,
+html.dark .text-slate-400,
+html.dark .text-slate-300,
+html.dark .text-slate-200 { color: #c8c8c8; }
+html.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+html.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: #3a3a3a; }
+html.dark .border-slate-100,
+html.dark .border-slate-200,
+html.dark .border-slate-200\/80,
+html.dark .border-slate-300 { border-color: #3a3a3a; }
+html.dark .hover\:bg-white:hover,
+html.dark .hover\:bg-slate-50:hover { background-color: #2a2a2a; }
+html.dark .hover\:bg-slate-100:hover,
+html.dark .hover\:bg-slate-800:hover { background-color: #3a3a3a; }
+html.dark .hover\:text-slate-900:hover,
+html.dark .hover\:text-slate-800:hover,
+html.dark .hover\:text-ink:hover,
+html.dark .hover\:text-slate-700:hover { color: #f4f4f5; }
+html.dark .placeholder\:text-slate-400::placeholder,
+html.dark .disabled\:text-slate-400:disabled { color: #b0b0b0; }
+html.dark .disabled\:bg-slate-200:disabled { background-color: #333; }
+html.dark .bg-red-50 { background-color: #3f1d1d; }
+html.dark .bg-amber-50,
+html.dark .bg-amber-100 { background-color: #3f2e12; }
+html.dark .bg-emerald-50 { background-color: #123024; }
+html.dark .bg-brand-50,
+html.dark .bg-brand-50\/70,
+html.dark .bg-sky-50 { background-color: #1e2433; }
+html.dark .text-red-800,
+html.dark .text-red-700,
+html.dark .text-red-900 { color: #fecaca; }
+html.dark .text-amber-800,
+html.dark .text-amber-900,
+html.dark .text-amber-700 { color: #fde68a; }
+html.dark .text-emerald-800,
+html.dark .text-emerald-700 { color: #a7f3d0; }
+html.dark .text-brand-900,
+html.dark .text-brand-800,
+html.dark .text-brand-700 { color: #c7d2fe; }
+html.dark .border-red-100,
+html.dark .border-red-200 { border-color: #7f1d1d; }
+html.dark .border-amber-100,
+html.dark .border-amber-200 { border-color: #78350f; }
+html.dark .border-emerald-100,
+html.dark .border-sky-200,
+html.dark .border-brand-100,
+html.dark .border-brand-200 { border-color: #3730a3; }
+html.dark .ring-slate-200 { --tw-ring-color: #3a3a3a; }
+html.dark .shadow-sm,
+html.dark .shadow-xl,
+html.dark .shadow-2xl { --tw-shadow-color: rgb(0 0 0 / 0.4); }
+
+/* Directional icons (arrows, chevrons) point the reading direction. */
+[dir="rtl"] .flip-rtl {
+  transform: scaleX(-1);
+}

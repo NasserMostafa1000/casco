@@ -1,0 +1,39 @@
+# Server 1: Caddy (TLS + reverse proxy) and the Casco API (serves the builder UI, the API and all published sites).
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/Dockerfile
+    image: casco-api:latest
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+    expose:
+      - "8080"
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    env_file: .env
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/etc/caddy/certs:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+volumes:
+  caddy_data:
+  caddy_config:

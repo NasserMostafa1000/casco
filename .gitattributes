@@ -1,0 +1,4 @@
+# Shell scripts and Docker files run on Linux servers.
+*.sh text eol=lf
+Caddyfile text eol=lf
+*.yml text eol=lf

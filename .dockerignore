@@ -1,0 +1,11 @@
+**/node_modules
+**/dist
+**/bin
+**/obj
+**/data
+**/.env
+**/*.db
+.git
+deploy/server1/certs
+deploy/server2/certs
+deploy/server2/backups

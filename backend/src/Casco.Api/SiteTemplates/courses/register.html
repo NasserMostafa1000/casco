@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>حساب جديد | {{BRAND}}</title>
+<meta name="description" content="{{DESCRIPTION}}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<style type="text/tailwindcss">
+  @theme { --color-primary: #895cdb; --color-primary-dark: #34187c; --color-accent: #b388ff; --font-sans: "Cairo", system-ui, sans-serif; }
+</style>
+</head>
+<body data-page="register" class="bg-slate-50 text-slate-800 font-sans antialiased min-h-screen flex flex-col">
+
+<!-- SECTION: header -->
+<header class="sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-slate-200">
+  <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
+    <a href="index.html" class="text-xl font-extrabold text-primary-dark">🎓 {{BRAND}}</a>
+    <nav class="flex items-center gap-6 text-sm font-semibold">
+      <a href="index.html" class="hover:text-primary">الرئيسية</a>
+      <a href="courses.html" class="hover:text-primary">الكورسات</a>
+    </nav>
+  </div>
+</header>
+
+<!-- SECTION: register-form -->
+<main class="flex-1 flex items-center justify-center px-4 py-12 bg-gradient-to-br from-primary/10 to-accent/10">
+  <div class="w-full max-w-md bg-white rounded-2xl shadow-xl p-8">
+    <h1 class="text-2xl font-extrabold text-primary-dark mb-1 text-center">أنشئ حسابك 🎓</h1>
+    <p class="text-slate-500 text-center mb-6">انضم إلينا وابدأ التعلم اليوم</p>
+    <form id="authForm" class="space-y-4">
+      <div><label for="name" class="block text-sm font-semibold mb-1">الاسم الكامل</label><input id="name" name="name" required autocomplete="name" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary"></div>
+      <div><label for="email" class="block text-sm font-semibold mb-1">البريد الإلكتروني</label><input id="email" name="email" type="email" required autocomplete="email" dir="ltr" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-right focus:outline-none focus:ring-2 focus:ring-primary"></div>
+      <div><label for="password" class="block text-sm font-semibold mb-1">كلمة المرور</label><input id="password" name="password" type="password" required minlength="6" autocomplete="new-password" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary"></div>
+      <div><label for="password2" class="block text-sm font-semibold mb-1">تأكيد كلمة المرور</label><input id="password2" name="password2" type="password" required minlength="6" autocomplete="new-password" class="w-full border border-slate-300 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary"></div>
+      <button type="submit" class="w-full bg-primary hover:bg-primary-dark disabled:opacity-60 text-white font-bold py-3 rounded-xl">إنشاء الحساب</button>
+    </form>
+    <p class="text-center text-sm text-slate-500 mt-6">لديك حساب بالفعل؟ <a href="login.html" data-keep-next class="text-primary font-bold hover:underline">سجّل الدخول</a></p>
+  </div>
+</main>
+
+<!-- SECTION: footer -->
+<footer class="bg-primary-dark text-white/70 py-6 text-center text-sm">© {{YEAR}} {{BRAND}}. جميع الحقوق محفوظة.</footer>
+
+<script src="assets/app.js"></script>
+</body>
+</html>

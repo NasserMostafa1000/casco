@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>الكورس | {{BRAND}}</title>
+<meta name="description" content="{{DESCRIPTION}}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<style type="text/tailwindcss">
+  @theme { --color-primary: #895cdb; --color-primary-dark: #34187c; --color-accent: #b388ff; --font-sans: "Cairo", system-ui, sans-serif; }
+</style>
+</head>
+<body data-page="course" class="bg-slate-50 text-slate-800 font-sans antialiased min-h-screen flex flex-col">
+
+<!-- SECTION: header -->
+<header class="sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-slate-200">
+  <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
+    <a href="index.html" class="text-xl font-extrabold text-primary-dark">🎓 {{BRAND}}</a>
+    <nav class="hidden md:flex items-center gap-6 text-sm font-semibold">
+      <a href="index.html" class="hover:text-primary">الرئيسية</a>
+      <a href="courses.html" class="hover:text-primary">الكورسات</a>
+      <a href="my-courses.html" class="hover:text-primary">كورساتي</a>
+    </nav>
+    <div data-auth-nav class="hidden md:flex items-center gap-3 text-sm font-semibold"></div>
+    <button data-menu-btn class="md:hidden p-2 rounded-lg hover:bg-slate-100" aria-label="القائمة" aria-expanded="false"><svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+  </div>
+  <div data-mobile-menu class="hidden md:hidden border-t border-slate-200 bg-white px-4 py-3 flex-col gap-3 font-semibold">
+    <a href="index.html">الرئيسية</a><a href="courses.html">الكورسات</a><a href="my-courses.html">كورساتي</a>
+    <div data-auth-nav class="flex flex-wrap items-center gap-3 pt-3 border-t border-slate-200 text-sm"></div>
+  </div>
+</header>
+
+<main class="flex-1">
+<!-- SECTION: loading skeleton -->
+<div id="loading" class="max-w-6xl mx-auto px-4 py-12 grid md:grid-cols-5 gap-8 animate-pulse">
+  <div class="md:col-span-3 space-y-4"><div class="h-5 w-24 bg-slate-200 rounded-full"></div><div class="h-9 w-3/4 bg-slate-200 rounded"></div><div class="h-4 bg-slate-200 rounded"></div><div class="h-4 w-2/3 bg-slate-200 rounded"></div><div class="h-12 w-40 bg-slate-200 rounded-xl"></div></div>
+  <div class="md:col-span-2 aspect-[8/5] bg-slate-200 rounded-2xl"></div>
+</div>
+
+<!-- SECTION: error state -->
+<div id="error" hidden class="max-w-xl mx-auto px-4 py-20 text-center">
+  <div class="text-5xl mb-3">😕</div>
+  <h1 class="font-bold text-xl mb-2">تعذر عرض الكورس</h1>
+  <p id="errorMsg" class="text-slate-500 mb-6"></p>
+  <a href="courses.html" class="inline-block bg-primary hover:bg-primary-dark text-white font-bold px-6 py-3 rounded-xl">تصفح الكورسات</a>
+</div>
+
+<div id="content" hidden>
+  <!-- SECTION: course-header (filled by assets/app.js) -->
+  <section class="bg-gradient-to-br from-primary-dark via-primary to-accent text-white">
+    <div class="max-w-6xl mx-auto px-4 py-12 grid md:grid-cols-5 gap-8 items-center">
+      <div class="md:col-span-3">
+        <span id="cCategory" class="inline-block bg-white/15 text-sm px-3 py-1 rounded-full mb-3"></span>
+        <h1 id="cTitle" class="text-3xl md:text-4xl font-extrabold mb-3"></h1>
+        <p id="cDesc" class="text-white/85 leading-8 mb-5 whitespace-pre-line"></p>
+        <div class="flex flex-wrap gap-4 text-sm text-white/90 mb-6"><span id="cInstructor"></span><span id="cLessons"></span></div>
+        <div class="flex flex-wrap items-center gap-4">
+          <span id="cPrice" class="text-3xl font-extrabold"></span>
+          <div id="action" class="flex flex-wrap items-center gap-3"></div>
+        </div>
+        <!-- pending enrollment notice -->
+        <div id="notice" hidden class="mt-5 bg-white text-slate-800 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 shadow-lg">
+          <p class="font-semibold">⏳ سيتم تفعيل اشتراكك بعد تأكيد الدفع</p>
+          <a id="payBtn" hidden href="#" target="_blank" rel="noopener" class="bg-primary hover:bg-primary-dark text-white font-bold px-5 py-2 rounded-xl">ادفع الآن</a>
+        </div>
+      </div>
+      <img id="cImage" src="{{STOCK}}/800x500/online-course-laptop" alt="" class="md:col-span-2 w-full rounded-2xl shadow-2xl aspect-[8/5] object-cover">
+    </div>
+  </section>
+
+  <!-- SECTION: player + lessons -->
+  <section class="max-w-6xl mx-auto px-4 py-10 grid lg:grid-cols-3 gap-8 items-start">
+    <div id="player" class="lg:col-span-2 bg-white rounded-2xl shadow-sm overflow-hidden scroll-mt-20">
+      <div id="playerMedia" class="aspect-video bg-slate-900 text-white/70 flex items-center justify-center text-center p-6">▶ اختر درساً متاحاً من القائمة لبدء المشاهدة</div>
+      <div class="p-6">
+        <h2 id="playerTitle" class="font-bold text-xl mb-2">محتوى الدرس</h2>
+        <div id="playerContent" class="text-slate-600 leading-8 whitespace-pre-line"></div>
+      </div>
+    </div>
+    <aside>
+      <h2 class="font-bold text-xl mb-4">دروس الكورس</h2>
+      <ol id="lessons" class="bg-white rounded-2xl shadow-sm divide-y divide-slate-100 overflow-hidden"></ol>
+    </aside>
+  </section>
+</div>
+</main>
+
+<!-- SECTION: footer -->
+<footer class="bg-primary-dark text-white/70 py-8">
+  <div class="max-w-6xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-3 text-sm">
+    <span class="font-bold text-white">{{BRAND}}</span>
+    <span>© {{YEAR}} {{BRAND}}. جميع الحقوق محفوظة.</span>
+  </div>
+</footer>
+
+<script src="assets/app.js"></script>
+</body>
+</html>

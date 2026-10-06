@@ -1,0 +1,8 @@
+{
+  "key": "courses",
+  "name": "منصة كورسات",
+  "description": "منصة تعليمية لبيع الكورسات والدروس مع حسابات للطلاب",
+  "plan": "pro",
+  "modules": ["forms", "courses"],
+  "keywords": ["كورس", "كورسات", "دورات", "دورة", "تعليم", "أكاديمية", "دروس", "مدرس", "تدريب", "course", "courses", "learning", "academy", "online school", "lessons", "tutoring", "कोर्स", "पाठ्यक्रम", "ऑनलाइन क्लास"]
+}
