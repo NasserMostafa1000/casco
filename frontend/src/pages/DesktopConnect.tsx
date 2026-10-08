@@ -2,16 +2,18 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Logo } from '../components/AppShell'
 import { Alert, Button } from '../components/ui'
-import { errorMessage, post, tokenStore, type Me } from '../lib/api'
+import { apiUrl, errorMessage, post, revokeToken, tokenStore, type Me } from '../lib/api'
 import { useAuth } from '../lib/auth'
-import { t } from '../lib/i18n'
+import { getLang, t } from '../lib/i18n'
 
 export function DesktopConnect() {
-  const enter = new URLSearchParams(location.search).get('enter')?.trim() ?? ''
+  const params = new URLSearchParams(location.search)
+  const enter = params.get('enter')?.trim() ?? ''
+  const next = safeBillingPath(params.get('next'))
   const { me, loading } = useAuth()
-  const code = new URLSearchParams(location.search).get('code')?.trim().toUpperCase() ?? ''
+  const code = params.get('code')?.trim().toUpperCase() ?? ''
   if (code) sessionStorage.setItem('casco_next', `/desktop?code=${encodeURIComponent(code)}`)
-  if (enter) return <EnterAccount code={enter} />
+  if (enter) return <EnterAccount code={enter} next={next} />
 
   return (
     <div className="flex min-h-screen flex-col px-4 py-5 sm:px-8">
@@ -29,15 +31,33 @@ export function DesktopConnect() {
   )
 }
 
-function EnterAccount({ code }: { code: string }) {
+function safeBillingPath(raw: string | null) {
+  if (raw && raw.startsWith('/app/billing') && !raw.startsWith('//')) return raw
+  return '/app/billing'
+}
+
+function EnterAccount({ code, next }: { code: string; next: string }) {
   const [error, setError] = useState('')
   useEffect(() => {
     let cancelled = false
-    post<{ token: string }>('/api/auth/device/enter', { deviceCode: code })
-      .then(result => {
+    // Do not send the browser's current login. This request must become the account open in Casco Studio.
+    fetch(apiUrl('/api/auth/device/enter'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Casco-Lang': getLang() },
+      body: JSON.stringify({ deviceCode: code }),
+    })
+      .then(async (res) => {
+        const data = (await res.json().catch(() => ({}))) as { token?: string; message?: string }
+        if (!res.ok || !data.token) throw new Error(data.message || 'رابط الدخول انتهى. ارجع لـ Casco Studio وحاول تاني.')
+        return data.token
+      })
+      .then(token => {
         if (cancelled) return
-        tokenStore.set(result.token)
-        location.assign('/app/billing')
+        const previous = tokenStore.get()
+        tokenStore.set(token)
+        if (previous && previous !== token) revokeToken(previous)
+        sessionStorage.setItem('casco_next', next)
+        location.replace(next)
       })
       .catch(err => {
         if (!cancelled) setError(errorMessage(err))
@@ -45,7 +65,7 @@ function EnterAccount({ code }: { code: string }) {
     return () => {
       cancelled = true
     }
-  }, [code])
+  }, [code, next])
 
   return error
     ? <Alert tone="error">{error}</Alert>

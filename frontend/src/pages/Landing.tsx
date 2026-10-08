@@ -46,6 +46,12 @@ export default function Landing() {
   const yearlySaving = plans ? yearlySavingLabel(plans.pro.monthlyPrice, plans.pro.yearlyPrice) : null
 
   useEffect(() => {
+    document.title = 'Casco Studio | استوديو ومحرر أكواد'
+    document.querySelector('meta[name="description"]')?.setAttribute('content', 'Casco Studio استوديو ومحرر أكواد بالذكاء الاصطناعي مثل Cursor و Claude. اكتب الكود وعدّله مع الوكيل، وابنِ مواقع كاملة.')
+    document.querySelector('link[rel="canonical"]')?.setAttribute('href', 'https://casco.studio/')
+  }, [])
+
+  useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8)
     onScroll()
     window.addEventListener('scroll', onScroll, { passive: true })
@@ -196,15 +202,15 @@ export default function Landing() {
         <div className="mx-auto max-w-4xl px-4 text-center sm:px-6">
           <span className="inline-flex animate-fade-up items-center gap-2 rounded-full border border-brand-200/70 bg-white/70 px-3.5 py-1.5 text-xs font-semibold text-brand-700 shadow-sm backdrop-blur sm:text-sm">
             <Sparkles className="h-4 w-4" />
-            {t('بدون برمجة • موقعك الأول مجاناً')}
+            {t('استوديو ومحرر أكواد بالذكاء الاصطناعي')}
           </span>
           <h1 className="mt-6 animate-fade-up text-4xl font-extrabold tracking-tight text-ink [animation-delay:80ms] sm:text-6xl lg:text-7xl">
-            {t('حوّل فكرتك إلى')}
+            {t('استوديو ومحرر أكواد')}
             <br />
-            <span className="text-gradient">{t('موقع جاهز في دقيقة')}</span>
+            <span className="text-gradient">{t('مثل Cursor و Claude')}</span>
           </h1>
           <p className="mx-auto mt-6 max-w-2xl animate-fade-up text-base text-slate-600 [animation-delay:160ms] sm:text-lg">
-            {t('Casco Studio يبني لك أي موقع بالذكاء الاصطناعي: مواقع تعريفية ومتاجر وحجز مواعيد ومنصات كورسات — بالواجهة والباك إند والاستضافة، وبأي لغة.')}
+            {t('Casco Studio استوديو ومحرر أكواد بالذكاء الاصطناعي. اكتب الكود وعدّله مع الوكيل مثل Cursor و Claude، وابنِ موقعك الكامل من نفس المكان.')}
           </p>
 
           <div className="mx-auto mt-10 max-w-2xl animate-fade-up rounded-3xl bg-gradient-to-br from-brand-500/40 via-violet-500/20 to-fuchsia-500/40 p-px shadow-2xl shadow-brand-900/10 [animation-delay:240ms]">

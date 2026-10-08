@@ -1,6 +1,7 @@
 using System.Net.Mail;
 using Casco.Api.Domain;
 using Casco.Api.Features.Ai;
+using Casco.Api.Features.Desktop;
 using Casco.Api.Features.Billing;
 using Casco.Api.Features.Projects;
 using Casco.Api.Features.SiteRuntime;
@@ -18,6 +19,7 @@ public record GrantCreditsRequest(int Amount, string? Note, decimal? PaidAmount 
 public record ActivatePlanRequest(string Interval, decimal? Amount = null);
 public record BroadcastEmailRequest(string? Subject, string? Message);
 public record DirectEmailRequest(string? To, string? Subject, string? Message);
+public record DesktopUpdateRequest(string? Version, string? Message);
 
 public static class AdminEndpoints
 {
@@ -27,27 +29,50 @@ public static class AdminEndpoints
         g.MapSystemMetrics();
         Monitoring.MonitoringEndpoints.MapMonitoring(g);
 
+        g.MapGet("/desktop-update", async (AppDbContext db, CancellationToken ct) =>
+            Results.Ok(await DesktopUpdate.LoadAsync(db, ct)));
+        g.MapPut("/desktop-update", async (DesktopUpdateRequest req, AppDbContext db, CancellationToken ct) =>
+        {
+            var version = (req.Version ?? "").Trim();
+            if (version.Length is < 1 or > 32 || version.Any(c => !char.IsDigit(c) && c != '.'))
+                throw ApiException.BadRequest("اكتب رقم النسخة مثل 0.3.0");
+            var message = (req.Message ?? "").Trim();
+            if (message.Length > 500) throw ApiException.BadRequest("رسالة التحديث طويلة");
+            await DesktopUpdate.SaveAsync(db, version, message, ct);
+            return Results.Ok(await DesktopUpdate.LoadAsync(db, ct));
+        });
+
         g.MapGet("/stats", async (AppDbContext db) =>
         {
             var now = DateTime.UtcNow;
             var since = now.AddDays(-30);
-            var usage = db.AiUsages.Where(u => u.CreatedAt >= since);
+            var usage = db.AiUsages.AsNoTracking().Where(u => u.CreatedAt >= since);
+            var rollup = await usage.GroupBy(_ => 1).Select(x => new
+            {
+                cost = x.Sum(u => (double?)(u.ActualCostUsd ?? u.EstimatedCostUsd)) ?? 0,
+                calls = x.Count(),
+                failures = x.Count(u => !u.Success),
+                cacheHits = x.Count(u => u.ResponseCacheHit),
+                inputTokens = x.Sum(u => (long?)u.InputTokens) ?? 0,
+                cachedInputTokens = x.Sum(u => (long?)u.CachedInputTokens) ?? 0,
+                outputTokens = x.Sum(u => (long?)u.OutputTokens) ?? 0
+            }).FirstOrDefaultAsync();
             return Results.Ok(new
             {
                 users = await db.Users.CountAsync(),
                 proUsers = await db.Subscriptions.CountAsync(s => s.Plan == PlanKeys.Pro && s.CurrentPeriodEnd > now),
                 projects = await db.Projects.CountAsync(),
                 publishedSites = await db.Projects.CountAsync(p => p.PublishedAt != null),
-                revenue30d = (await db.Payments.Where(p => p.Status == PaymentStatuses.Completed && !p.IsTest && p.CompletedAt >= since)
+                revenue30d = (await db.Payments.AsNoTracking().Where(p => p.Status == PaymentStatuses.Completed && !p.IsTest && p.CompletedAt >= since)
                     .SumAsync(p => (int?)p.AmountMinor) ?? 0) / 100m,
-                aiCost30d = await usage.SumAsync(u => (double?)(u.ActualCostUsd ?? u.EstimatedCostUsd)) ?? 0,
-                aiCalls30d = await usage.CountAsync(),
-                aiFailures30d = await usage.CountAsync(u => !u.Success),
-                responseCacheHits30d = await usage.CountAsync(u => u.ResponseCacheHit),
-                inputTokens30d = await usage.SumAsync(u => (long?)u.InputTokens) ?? 0,
-                cachedInputTokens30d = await usage.SumAsync(u => (long?)u.CachedInputTokens) ?? 0,
-                outputTokens30d = await usage.SumAsync(u => (long?)u.OutputTokens) ?? 0,
-                creditsCharged30d = -(await db.CreditEntries.Where(e => e.Type == CreditEntryTypes.Usage && e.CreatedAt >= since).SumAsync(e => (int?)e.Amount) ?? 0),
+                aiCost30d = rollup?.cost ?? 0,
+                aiCalls30d = rollup?.calls ?? 0,
+                aiFailures30d = rollup?.failures ?? 0,
+                responseCacheHits30d = rollup?.cacheHits ?? 0,
+                inputTokens30d = rollup?.inputTokens ?? 0,
+                cachedInputTokens30d = rollup?.cachedInputTokens ?? 0,
+                outputTokens30d = rollup?.outputTokens ?? 0,
+                creditsCharged30d = -(await db.CreditEntries.AsNoTracking().Where(e => e.Type == CreditEntryTypes.Usage && e.CreatedAt >= since).SumAsync(e => (int?)e.Amount) ?? 0),
                 tasks30d = await db.AgentTasks.CountAsync(t => t.CreatedAt >= since),
                 failedTasks30d = await db.AgentTasks.CountAsync(t => t.CreatedAt >= since && t.Status == TaskStatuses.Failed),
                 byModel = await usage.GroupBy(u => u.Model).Select(x => new
@@ -59,6 +84,42 @@ public static class AdminEndpoints
                     cachedInputTokens = x.Sum(u => (long)u.CachedInputTokens),
                     outputTokens = x.Sum(u => (long)u.OutputTokens)
                 }).ToListAsync()
+            });
+        });
+
+        g.MapGet("/desktop-messages", async (int? page, string? q, AppDbContext db, CancellationToken ct) =>
+        {
+            const int size = 20;
+            var index = Math.Max(1, page ?? 1);
+            var query = db.DesktopChatMessages.AsNoTracking();
+            var term = (q ?? "").Trim();
+            if (term.Length > 0)
+            {
+                var ids = db.Users.AsNoTracking().Where(u => u.Email.Contains(term) || u.Name.Contains(term)).Select(u => u.Id);
+                query = query.Where(m => ids.Contains(m.UserId));
+            }
+            var total = await query.CountAsync(ct);
+            var rows = await query.OrderByDescending(m => m.Id).Skip((index - 1) * size).Take(size)
+                .Select(m => new { m.Id, m.UserId, m.Model, m.Text, m.CreatedAt })
+                .ToListAsync(ct);
+            var userIds = rows.Select(m => m.UserId).Distinct().ToList();
+            var users = await db.Users.AsNoTracking().Where(u => userIds.Contains(u.Id))
+                .Select(u => new { u.Id, u.Email, u.Name })
+                .ToDictionaryAsync(u => u.Id, ct);
+            return Results.Ok(new
+            {
+                total,
+                page = index,
+                pageSize = size,
+                items = rows.Select(m => new
+                {
+                    m.Id,
+                    email = users.GetValueOrDefault(m.UserId)?.Email ?? "",
+                    name = users.GetValueOrDefault(m.UserId)?.Name ?? "",
+                    m.Model,
+                    m.Text,
+                    at = m.CreatedAt
+                })
             });
         });
 

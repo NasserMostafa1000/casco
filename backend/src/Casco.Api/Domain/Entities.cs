@@ -157,6 +157,31 @@ public class User
     public Subscription? Subscription { get; set; }
 }
 
+/// <summary>One computer that installed Casco Studio. The free prompt and the five free hours belong to the machine, not the account.</summary>
+public class DesktopMachine
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    /// <summary>SHA-256 of the id stored on that computer.</summary>
+    public string MachineHash { get; set; } = "";
+    public bool FreePromptUsed { get; set; }
+    /// <summary>Bits 0–4 are the five group shares.</summary>
+    public int ShareMask { get; set; }
+    public DateTime? TrialEndsAt { get; set; }
+    public Guid? LastUserId { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>A desktop chat prompt kept for the admin dashboard. The text is clipped.</summary>
+public class DesktopChatMessage
+{
+    public long Id { get; set; }
+    public Guid UserId { get; set; }
+    public string MachineHash { get; set; } = "";
+    public string Model { get; set; } = "";
+    public string Text { get; set; } = "";
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
 /// <summary>A Casco Studio desktop sign-in waiting for the website account to approve it.</summary>
 public class DesktopLogin
 {

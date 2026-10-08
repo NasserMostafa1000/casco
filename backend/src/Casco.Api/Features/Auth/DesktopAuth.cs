@@ -97,10 +97,10 @@ public static class DesktopAuth
             DeviceCodeHash = HashDeviceCode(secret),
             UserId = http.User.UserId(),
             Status = "handoff",
-            ExpiresAt = now.AddMinutes(2)
+            ExpiresAt = now.AddMinutes(10)
         });
         await db.SaveChangesAsync(ct);
-        var url = $"{appOpt.Value.FrontendBase.TrimEnd('/')}/desktop?enter={Uri.EscapeDataString(secret)}";
+        var url = $"{appOpt.Value.FrontendBase.TrimEnd('/')}/desktop?enter={Uri.EscapeDataString(secret)}&next={Uri.EscapeDataString("/app/billing")}";
         return Results.Ok(new { url });
     }
 

@@ -33,7 +33,11 @@ export function RequireAuth() {
         <Spinner className="h-8 w-8" />
       </div>
     )
-  if (!me) return <Navigate to="/login" replace />
+  if (!me) {
+    const next = `${location.pathname}${location.search}`
+    if (next.startsWith('/app/') && !next.startsWith('//')) sessionStorage.setItem('casco_next', next)
+    return <Navigate to="/login" replace />
+  }
   return <Outlet />
 }
 

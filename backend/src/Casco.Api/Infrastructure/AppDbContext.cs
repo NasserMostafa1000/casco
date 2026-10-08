@@ -35,6 +35,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<SentNotification> SentNotifications => Set<SentNotification>();
     public DbSet<RevokedToken> RevokedTokens => Set<RevokedToken>();
     public DbSet<DesktopLogin> DesktopLogins => Set<DesktopLogin>();
+    public DbSet<DesktopMachine> DesktopMachines => Set<DesktopMachine>();
+    public DbSet<DesktopChatMessage> DesktopChatMessages => Set<DesktopChatMessage>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -97,6 +99,21 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.Kind).HasMaxLength(20);
             e.Property(x => x.Status).HasMaxLength(20);
             e.Property(x => x.Currency).HasMaxLength(3);
+        });
+
+        b.Entity<DesktopMachine>(e =>
+        {
+            e.HasIndex(x => x.MachineHash).IsUnique();
+            e.Property(x => x.MachineHash).HasMaxLength(64);
+        });
+
+        b.Entity<DesktopChatMessage>(e =>
+        {
+            e.HasIndex(x => x.CreatedAt);
+            e.HasIndex(x => x.UserId);
+            e.Property(x => x.MachineHash).HasMaxLength(64);
+            e.Property(x => x.Model).HasMaxLength(80);
+            e.Property(x => x.Text).HasMaxLength(2000);
         });
 
         b.Entity<DesktopLogin>(e =>

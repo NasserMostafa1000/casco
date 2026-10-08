@@ -7,6 +7,7 @@ using Casco.Api.Domain;
 using Casco.Api.Features.Ai;
 using Casco.Api.Features.Billing;
 using Casco.Api.Infrastructure;
+using Microsoft.Extensions.Options;
 
 namespace Casco.Api.Features.Desktop;
 
@@ -16,15 +17,60 @@ public static class DesktopAgentEndpoints
 
     public static void MapDesktopAgentEndpoints(this IEndpointRouteBuilder app)
     {
+        app.MapGet("/api/desktop/update", UpdateAsync);
         var g = app.MapGroup("/api/desktop").RequireAuthorization();
         g.MapGet("/models", ModelsAsync);
+        g.MapGet("/access", AccessAsync);
+        g.MapPost("/share", ShareAsync);
         g.MapPost("/chat", ChatAsync).RequireRateLimiting("desktop");
         g.MapPost("/images", ImagesAsync).RequireRateLimiting("desktop");
     }
 
-    private static async Task<IResult> ModelsAsync(ModelCatalog catalog, SubscriptionService subs, HttpContext http)
+    private static async Task<IResult> UpdateAsync(string? version, AppDbContext db, IOptions<AppOptions> app, CancellationToken ct)
     {
-        var plan = await subs.GetPlanAsync(http.User.UserId());
+        var policy = await DesktopUpdate.LoadAsync(db, ct);
+        var message = string.IsNullOrWhiteSpace(policy.Message) ? DesktopUpdate.DefaultMessage : policy.Message;
+        return Results.Ok(new
+        {
+            required = DesktopUpdate.IsOlder(version, policy.Version),
+            version = policy.Version,
+            message,
+            url = $"{app.Value.FrontendBase}/download?update=1"
+        });
+    }
+
+    private static async Task<IResult> AccessAsync(SubscriptionService subs, AppDbContext db, HttpContext http, CancellationToken ct)
+    {
+        var userId = http.User.UserId();
+        var plan = await subs.GetPlanAsync(userId);
+        var access = await DesktopTrial.ReadAsync(db, userId, plan.IsPro, http.Request.Headers[DesktopTrial.MachineHeader], ct);
+        return Results.Ok(AccessBody(access));
+    }
+
+    private static async Task<IResult> ShareAsync(JsonElement body, SubscriptionService subs, AppDbContext db, HttpContext http, CancellationToken ct)
+    {
+        var slot = body.TryGetProperty("slot", out var slotEl) && slotEl.TryGetInt32(out var value) ? value : 0;
+        var userId = http.User.UserId();
+        var plan = await subs.GetPlanAsync(userId);
+        var access = await DesktopTrial.ShareAsync(db, userId, plan.IsPro, http.Request.Headers[DesktopTrial.MachineHeader], slot, ct);
+        return Results.Ok(AccessBody(access));
+    }
+
+    private static object AccessBody(DesktopTrial.Access access) => new
+    {
+        modelLocked = access.ModelLocked,
+        shareRequired = access.ShareRequired,
+        shares = access.Shares,
+        slots = Enumerable.Range(1, DesktopTrial.Groups).Where(slot => (access.Mask & (1 << (slot - 1))) != 0).ToArray(),
+        trialEndsAt = access.TrialEndsAt,
+        downloadUrl = DesktopTrial.DownloadUrl,
+    };
+
+    private static async Task<IResult> ModelsAsync(ModelCatalog catalog, SubscriptionService subs, AppDbContext db, HttpContext http, CancellationToken ct)
+    {
+        var userId = http.User.UserId();
+        var plan = await subs.GetPlanAsync(userId);
+        var access = await DesktopTrial.ReadAsync(db, userId, plan.IsPro, http.Request.Headers[DesktopTrial.MachineHeader], ct);
         var tiers = await catalog.GetEffectiveTiersAsync();
         var premiumOnly = new HashSet<string>(tiers.GetValueOrDefault(AiTiers.Premium) ?? [], StringComparer.Ordinal);
         foreach (var tier in new[] { AiTiers.Cheap, AiTiers.Standard })
@@ -46,7 +92,7 @@ public static class DesktopAgentEndpoints
             .ToList();
         var autoCost = models.Where(m => m.allowed).Select(m => m.cost).DefaultIfEmpty(0).Min();
         models.Insert(0, new { id = "auto", label = "Auto", premium = false, allowed = true, cost = autoCost });
-        return Results.Ok(new { plan = plan.Key, models });
+        return Results.Ok(new { plan = plan.Key, models, modelLocked = access.ModelLocked, shareRequired = access.ShareRequired, shares = access.Shares, slots = Enumerable.Range(1, DesktopTrial.Groups).Where(slot => (access.Mask & (1 << (slot - 1))) != 0).ToArray(), downloadUrl = DesktopTrial.DownloadUrl });
     }
 
     private static string EnglishLabel(AiModelOptions model)
@@ -62,8 +108,14 @@ public static class DesktopAgentEndpoints
         if (!body.TryGetProperty("model", out var modelEl) || modelEl.ValueKind != JsonValueKind.String)
             throw ApiException.BadRequest("اختار موديل", "model_required");
         var modelId = modelEl.GetString() ?? "";
+        await DesktopUpdate.EnsureCurrentAsync(http, db, ct);
         var userId = http.User.UserId();
         var plan = await subs.GetPlanAsync(userId);
+        var machine = http.Request.Headers[DesktopTrial.MachineHeader].ToString();
+        var access = await DesktopTrial.ReadAsync(db, userId, plan.IsPro, machine, ct);
+        if (access.ShareRequired)
+            throw new ApiException(402, "شارك رابط تنزيل Casco في 5 جروبات عشان تتفعل 5 ساعات مجانية.", "share_required");
+        if (access.ModelLocked) modelId = "auto";
         var tiers = await catalog.GetEffectiveTiersAsync();
         var premiumOnly = new HashSet<string>(tiers.GetValueOrDefault(AiTiers.Premium) ?? [], StringComparer.Ordinal);
         foreach (var tier in new[] { AiTiers.Cheap, AiTiers.Standard })
@@ -79,9 +131,10 @@ public static class DesktopAgentEndpoints
         if (!plan.CanUsePremium && premiumOnly.Contains(model.Id))
             throw ApiException.Payment("This model is for Pro accounts. Choose another model or upgrade at casco.studio.", "premium_model");
 
+        var covered = access.FreePrompt || access.Trial;
         var balance = await credits.GetBalanceAsync(userId);
-        if (balance.Available < 1)
-            throw new ApiException(402, "Your Casco credits are used up. Add credits at casco.studio.", "insufficient_credits");
+        if (!covered && balance.Available < 1)
+            throw new ApiException(402, "Your Casco credits are used up. Add credits at https://casco.studio/app/billing.", "insufficient_credits");
 
         if (!body.TryGetProperty("messages", out var messagesEl) || messagesEl.ValueKind != JsonValueKind.Array)
             throw ApiException.BadRequest("The message is missing.", "messages_required");
@@ -111,15 +164,20 @@ public static class DesktopAgentEndpoints
         var cost = usage.CostUsd ?? CostCalculator.Compute(model, usage.Input, usage.Cached, usage.Output);
         if (cost <= 0 && (usage.Input + usage.Output) == 0)
             cost = CostCalculator.Compute(model, TokenEstimate.FromChars(messages.Sum(ContentChars)), 0, TokenEstimate.FromChars(CompletionChars(completion)));
-        var charged = credits.CreditsForCost(cost);
-        if (charged < 1) charged = 1;
-        var after = await credits.ChargeAsync(userId, charged, "desktop");
+        var charged = covered ? 0 : Math.Max(1, credits.CreditsForCost(cost));
+        var after = covered ? balance : await credits.ChargeAsync(userId, charged, "desktop");
+        if (access.FreePrompt) await DesktopTrial.MarkFreePromptUsedAsync(db, machine, ct);
+        await DesktopTrial.LogAsync(db, userId, machine, model.Id, DesktopTrial.PromptText(body), ct);
         await RecordAsync(db, userId, plan.Key, model, usage.Input, usage.Cached, usage.Output, cost, true, null, (int)started.ElapsedMilliseconds, "desktop");
 
         return Results.Ok(new
         {
             completion,
-            credits = new { charged, available = after.Available }
+            credits = new { charged, available = after.Available },
+            shareRequired = access.FreePrompt,
+            shares = access.Shares,
+            modelLocked = access.ModelLocked || access.FreePrompt,
+            downloadUrl = DesktopTrial.DownloadUrl
         });
     }
 
@@ -135,12 +193,18 @@ public static class DesktopAgentEndpoints
         if (prompt.Length == 0 || prompt.Length > 1000)
             throw ApiException.BadRequest("اكتب وصف الصورة في رسالة قصيرة.", "prompt_required");
 
+        await DesktopUpdate.EnsureCurrentAsync(http, db, ct);
         var userId = http.User.UserId();
         var plan = await subs.GetPlanAsync(userId);
-        var charge = Math.Max(1, credits.CreditsForCost(ImageUsd));
+        var machine = http.Request.Headers[DesktopTrial.MachineHeader].ToString();
+        var access = await DesktopTrial.ReadAsync(db, userId, plan.IsPro, machine, ct);
+        if (access.ShareRequired)
+            throw new ApiException(402, "شارك رابط تنزيل Casco في 5 جروبات عشان تتفعل 5 ساعات مجانية.", "share_required");
+        var covered = access.Trial;
+        var charge = covered ? 0 : Math.Max(1, credits.CreditsForCost(ImageUsd));
         var balance = await credits.GetBalanceAsync(userId);
-        if (balance.Available < charge)
-            throw new ApiException(402, "رصيد النقاط خلص. اشحن الحساب من casco.studio.", "insufficient_credits");
+        if (!covered && balance.Available < charge)
+            throw new ApiException(402, "رصيد النقاط خلص. اشحن الحساب من https://casco.studio/app/billing.", "insufficient_credits");
 
         var started = Stopwatch.StartNew();
         var imageModel = new AiModelOptions { Id = ImageModel, Provider = "openai" };
@@ -157,7 +221,7 @@ public static class DesktopAgentEndpoints
             throw new ApiException(502, "توليد الصورة فشل. حاول تاني.", "image_failed");
         }
 
-        var after = await credits.ChargeAsync(userId, charge, "desktop-image");
+        var after = covered ? balance : await credits.ChargeAsync(userId, charge, "desktop-image");
         await RecordAsync(db, userId, plan.Key, imageModel, 0, 0, 0, ImageUsd, true, null, (int)started.ElapsedMilliseconds, "desktop-image");
         return Results.Ok(new
         {

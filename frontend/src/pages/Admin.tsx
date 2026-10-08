@@ -47,6 +47,7 @@ const tabs = [
   { key: 'pricing', label: 'الأسعار' },
   { key: 'transfers', label: 'تحويلات المحفظة' },
   { key: 'models', label: 'الموديلات' },
+  { key: 'messages', label: 'رسائل البرنامج' },
 ] as const
 
 export default function Admin() {
@@ -131,6 +132,12 @@ export default function Admin() {
         </div>
       )}
 
+      {tab === 'messages' && (
+        <div className="mt-6">
+          <DesktopMessages />
+        </div>
+      )}
+
       {tab === 'overview' && (!stats ? (
         <Spinner className="mt-6 h-6 w-6 text-brand-600" />
       ) : (
@@ -172,6 +179,7 @@ export default function Admin() {
               </tbody>
             </table>
           </Card>
+          <DesktopRelease onDone={(text) => setMsg({ tone: 'success', text })} onError={(text) => setMsg({ tone: 'error', text })} />
           <BroadcastMail users={stats.users} onDone={(text) => setMsg({ tone: 'success', text })} onError={(text) => setMsg({ tone: 'error', text })} />
           <DirectMail onDone={(text) => setMsg({ tone: 'success', text })} onError={(text) => setMsg({ tone: 'error', text })} />
           <SystemHealth />
@@ -320,6 +328,117 @@ function DirectMail({ onDone, onError }: { onDone: (text: string) => void; onErr
         <Textarea label="الرسالة" rows={5} value={message} maxLength={4000} onChange={(e) => setMessage(e.target.value)} />
         <Button onClick={() => void send()} loading={sending} disabled={to.trim().length < 3 || subject.trim().length < 2 || message.trim().length < 2}>
           إرسال
+        </Button>
+      </div>
+    </Card>
+  )
+}
+
+function DesktopMessages() {
+  const [page, setPage] = useState(1)
+  const [q, setQ] = useState('')
+  const [query, setQuery] = useState('')
+  const [data, setData] = useState<{ total: number; page: number; pageSize: number; items: { id: number; email: string; name: string; model: string; text: string; at: string }[] } | null>(null)
+  const [error, setError] = useState('')
+  useEffect(() => {
+    const ctrl = { cancelled: false }
+    setError('')
+    const path = `/api/admin/desktop-messages?page=${page}${query ? `&q=${encodeURIComponent(query)}` : ''}`
+    get<NonNullable<typeof data>>(path)
+      .then((rows) => {
+        if (!ctrl.cancelled) setData(rows)
+      })
+      .catch((e) => {
+        if (!ctrl.cancelled) setError(errorMessage(e))
+      })
+    return () => {
+      ctrl.cancelled = true
+    }
+  }, [page, query])
+  const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1
+  return (
+    <Card className="overflow-x-auto p-0">
+      <div className="flex flex-wrap items-end gap-2 p-4">
+        <Input label="بحث بالإيميل أو الاسم" value={q} onChange={(e) => setQ(e.target.value)} />
+        <Button onClick={() => { setPage(1); setQuery(q.trim()) }}>بحث</Button>
+      </div>
+      {error && <p className="px-4 pb-3 text-sm text-red-600">{error}</p>}
+      {!data ? (
+        <Spinner className="m-4 h-6 w-6 text-brand-600" />
+      ) : (
+        <>
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-slate-500">
+              <tr>
+                <th className="p-3 text-start">المستخدم</th>
+                <th className="p-3 text-start">الموديل</th>
+                <th className="p-3 text-start">الرسالة</th>
+                <th className="p-3 text-start">الوقت</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.items.map((item) => (
+                <tr key={item.id} className="border-t border-slate-100 align-top">
+                  <td className="p-3">
+                    <div className="font-semibold">{item.name || '—'}</div>
+                    <div className="text-xs text-slate-500" dir="ltr">{item.email}</div>
+                  </td>
+                  <td className="p-3 font-mono text-xs" dir="ltr">{item.model}</td>
+                  <td className="max-w-xl p-3 whitespace-pre-wrap">{item.text}</td>
+                  <td className="p-3 text-xs text-slate-500" dir="ltr">{new Date(item.at).toLocaleString()}</td>
+                </tr>
+              ))}
+              {data.items.length === 0 && (
+                <tr><td className="p-4 text-slate-500" colSpan={4}>لا توجد رسائل</td></tr>
+              )}
+            </tbody>
+          </table>
+          <div className="flex items-center justify-between p-4 text-sm">
+            <span>{data.total} رسالة</span>
+            <div className="flex gap-2">
+              <Button disabled={page <= 1} onClick={() => setPage((n) => Math.max(1, n - 1))}>السابق</Button>
+              <span className="px-2 py-2">{page} / {pages}</span>
+              <Button disabled={page >= pages} onClick={() => setPage((n) => n + 1)}>التالي</Button>
+            </div>
+          </div>
+        </>
+      )}
+    </Card>
+  )
+}
+
+function DesktopRelease({ onDone, onError }: { onDone: (text: string) => void; onError: (text: string) => void }) {
+  const [version, setVersion] = useState('0.2.0')
+  const [message, setMessage] = useState('')
+  const [saving, setSaving] = useState(false)
+  useEffect(() => {
+    get<{ version: string; message: string }>('/api/admin/desktop-update')
+      .then((r) => {
+        setVersion(r.version || '0.2.0')
+        setMessage(r.message || '')
+      })
+      .catch(() => {})
+  }, [])
+  const save = async () => {
+    setSaving(true)
+    try {
+      await put('/api/admin/desktop-update', { version, message })
+      onDone('أي برنامج أقدم من النسخة دي هيتوقف ويطلب التحديث')
+    } catch (e) {
+      onError(errorMessage(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+  return (
+    <Card className="mt-6">
+      <h2 className="text-lg font-bold">تحديث البرنامج</h2>
+      <p className="mt-1 text-sm text-slate-500">النسخة الحالية في البرنامج هي 0.2.0. لو كتبت رقم أعلى، النسخ الأقدم تتوقف وتفتح صفحة التنزيل بالرسالة دي.</p>
+      <div className="mt-4 space-y-3">
+        <Input label="أقل نسخة مسموحة" value={version} dir="ltr" onChange={(e) => setVersion(e.target.value)} />
+        <Textarea label="رسالة التحديث" rows={3} value={message} maxLength={500} onChange={(e) => setMessage(e.target.value)} />
+        <Button onClick={() => void save()} loading={saving} disabled={!/^\d+(\.\d+)*$/.test(version.trim())}>
+          فرض التحديث
         </Button>
       </div>
     </Card>

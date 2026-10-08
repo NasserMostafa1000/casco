@@ -157,6 +157,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(o =>
 });
 builder.Services.Configure<FormOptions>(o => o.MultipartBodyLengthLimit = 4 * 1024 * 1024);
 
+builder.Services.AddResponseCompression(o => o.EnableForHttps = true);
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<TokenService>();
@@ -284,6 +285,7 @@ if (app.Services.GetRequiredService<IUploadStorage>() is R2UploadStorage r2)
     }
 }
 
+app.UseResponseCompression();
 app.UseForwardedHeaders();
 app.UseApiErrors();
 app.UseMiddleware<FloodGuardMiddleware>();

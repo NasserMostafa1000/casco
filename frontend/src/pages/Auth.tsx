@@ -58,7 +58,7 @@ function Shell({ title, subtitle, children }: { title: string; subtitle: string;
 
 function afterAuthPath() {
   const next = sessionStorage.getItem('casco_next')
-  if (next && next.startsWith('/desktop?code=')) {
+  if (next && (next.startsWith('/desktop?code=') || (next.startsWith('/app/') && !next.startsWith('//')))) {
     sessionStorage.removeItem('casco_next')
     return next
   }

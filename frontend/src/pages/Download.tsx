@@ -4,6 +4,7 @@ import { Apple, ArrowRight, Monitor } from 'lucide-react'
 import { Logo } from '../components/AppShell'
 import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import { ThemeToggle } from '../components/ThemeToggle'
+import { get } from '../lib/api'
 import { t } from '../lib/i18n'
 
 const REPO = 'NasserMostafa1000/casco-studio'
@@ -32,10 +33,29 @@ export default function Download() {
   const [version, setVersion] = useState('')
   const [assets, setAssets] = useState<Asset[]>([])
   const [ready, setReady] = useState(false)
+  const [notice, setNotice] = useState('')
+  const forced = new URLSearchParams(location.search).get('update') === '1'
 
   useEffect(() => {
-    document.title = `${t('تنزيل')} | Casco Studio`
+    document.title = `${t('تنزيل')} Casco Studio | استوديو ومحرر أكواد`
+    document.querySelector('meta[name="description"]')?.setAttribute('content', 'Download Casco Studio, an AI code studio and code editor for Windows and Mac, like Cursor and Claude.')
+    document.querySelector('link[rel="canonical"]')?.setAttribute('href', 'https://casco.studio/download')
   }, [])
+
+  useEffect(() => {
+    if (!forced) return
+    let cancelled = false
+    get<{ message?: string }>('/api/desktop/update')
+      .then((data) => {
+        if (!cancelled) setNotice(data.message || '')
+      })
+      .catch(() => {
+        if (!cancelled) setNotice('')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [forced])
 
   useEffect(() => {
     const ctrl = new AbortController()
@@ -69,6 +89,12 @@ export default function Download() {
       </header>
 
       <main className="mx-auto max-w-5xl px-4 py-16 sm:px-6 sm:py-24">
+        {forced && (
+          <section className="mb-8 rounded-3xl border border-amber-300 bg-amber-50 p-5 text-amber-950">
+            <h2 className="text-lg font-extrabold">{t('تحديث مطلوب')}</h2>
+            <p className="mt-2 text-base">{notice || t('فيه نسخة جديدة من Casco Studio. نزّلها عشان تكمل استخدام البرنامج.')}</p>
+          </section>
+        )}
         <h1 className="text-4xl font-extrabold tracking-tight text-ink sm:text-6xl">{t('تنزيل')}</h1>
         <p className="mt-3 text-sm font-semibold uppercase tracking-wider text-brand-600">Casco Studio</p>
         <p className="mt-4 max-w-2xl text-lg text-slate-600">
