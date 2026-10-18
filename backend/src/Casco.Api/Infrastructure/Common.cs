@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.Extensions.Options;
 
 namespace Casco.Api.Infrastructure;
 
@@ -74,6 +75,7 @@ public static class ErrorHandling
             if (status == 500)
                 ctx.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("Errors")
                     .LogError(ex, "Unhandled error on {Method} {Host}{Path}", ctx.Request.Method, ctx.Request.Host.Value, ctx.Request.Path.Value);
+            ApplyCors(ctx);
             ctx.Response.StatusCode = status;
             await ctx.Response.WriteAsJsonAsync(new { message, code });
         }));
@@ -85,10 +87,25 @@ public static class ErrorHandling
             catch (ApiException api) when (!ctx.Response.HasStarted)
             {
                 ctx.Response.Clear();
+                ApplyCors(ctx);
                 ctx.Response.StatusCode = api.Status;
                 await ctx.Response.WriteAsJsonAsync(new { message = api.Message, code = api.Code, details = api.Details });
             }
         });
+    }
+
+    /// <summary>
+    /// Error responses are written before the CORS middleware runs, so the browser would hide them
+    /// and the dashboard would only see "Failed to fetch".
+    /// </summary>
+    static void ApplyCors(HttpContext ctx)
+    {
+        var origin = ctx.Request.Headers.Origin.ToString();
+        if (string.IsNullOrEmpty(origin)) return;
+        var allowed = ctx.RequestServices.GetService<IOptions<AppOptions>>()?.Value.CorsOrigins ?? [];
+        if (!allowed.Contains(origin, StringComparer.OrdinalIgnoreCase)) return;
+        ctx.Response.Headers.AccessControlAllowOrigin = origin;
+        ctx.Response.Headers.Append("Vary", "Origin");
     }
 }
 

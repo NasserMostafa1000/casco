@@ -3,6 +3,7 @@ using Casco.Api.Domain;
 using Casco.Api.Features.Ai;
 using Casco.Api.Features.Desktop;
 using Casco.Api.Features.Billing;
+using Casco.Api.Features.Notifications;
 using Casco.Api.Features.Projects;
 using Casco.Api.Features.SiteRuntime;
 using Casco.Api.Infrastructure;
@@ -84,42 +85,6 @@ public static class AdminEndpoints
                     cachedInputTokens = x.Sum(u => (long)u.CachedInputTokens),
                     outputTokens = x.Sum(u => (long)u.OutputTokens)
                 }).ToListAsync()
-            });
-        });
-
-        g.MapGet("/desktop-messages", async (int? page, string? q, AppDbContext db, CancellationToken ct) =>
-        {
-            const int size = 20;
-            var index = Math.Max(1, page ?? 1);
-            var query = db.DesktopChatMessages.AsNoTracking();
-            var term = (q ?? "").Trim();
-            if (term.Length > 0)
-            {
-                var ids = db.Users.AsNoTracking().Where(u => u.Email.Contains(term) || u.Name.Contains(term)).Select(u => u.Id);
-                query = query.Where(m => ids.Contains(m.UserId));
-            }
-            var total = await query.CountAsync(ct);
-            var rows = await query.OrderByDescending(m => m.Id).Skip((index - 1) * size).Take(size)
-                .Select(m => new { m.Id, m.UserId, m.Model, m.Text, m.CreatedAt })
-                .ToListAsync(ct);
-            var userIds = rows.Select(m => m.UserId).Distinct().ToList();
-            var users = await db.Users.AsNoTracking().Where(u => userIds.Contains(u.Id))
-                .Select(u => new { u.Id, u.Email, u.Name })
-                .ToDictionaryAsync(u => u.Id, ct);
-            return Results.Ok(new
-            {
-                total,
-                page = index,
-                pageSize = size,
-                items = rows.Select(m => new
-                {
-                    m.Id,
-                    email = users.GetValueOrDefault(m.UserId)?.Email ?? "",
-                    name = users.GetValueOrDefault(m.UserId)?.Name ?? "",
-                    m.Model,
-                    m.Text,
-                    at = m.CreatedAt
-                })
             });
         });
 
@@ -230,13 +195,49 @@ public static class AdminEndpoints
             return Results.Ok(new { sent });
         });
 
-        g.MapPost("/email/send", (DirectEmailRequest req, EmailQueue queue, IOptions<AppOptions> app) =>
+        g.MapPost("/email/free-publish", async (AppDbContext db, EmailQueue queue, IOptions<AppOptions> app, CancellationToken ct) =>
+        {
+            if (!queue.Enabled)
+                throw ApiException.BadRequest("الإيميل غير مفعّل: اضبط Smtp في ملف البيئة", "email_disabled");
+            var home = app.Value.FrontendBase.TrimEnd('/');
+            var users = await db.Users.AsNoTracking()
+                .Where(u => u.Email != "")
+                .Select(u => new { u.Email, u.Name, u.Locale })
+                .ToListAsync(ct);
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var sent = 0;
+            foreach (var user in users)
+            {
+                if (!seen.Add(user.Email)) continue;
+                var content = EmailCopy.FreePublish(EmailText.Normalize(user.Locale), user.Name, home);
+                var (html, text) = EmailLayout.Render(content, home);
+                if (queue.Enqueue(new EmailMessage(user.Email, content.Subject, html, text, "free-publish"))) sent++;
+            }
+            return Results.Ok(new { sent });
+        });
+
+        g.MapPost("/email/send", async (DirectEmailRequest req, SmtpMailer mailer, EmailQueue queue, IOptions<AppOptions> app, CancellationToken ct) =>
         {
             var recipients = ParseRecipients(req.To);
             var (subject, html, text) = AdminMail(queue, app.Value, req.Subject, req.Message);
             var sent = 0;
+            var errors = new List<string>();
             foreach (var email in recipients)
-                if (queue.Enqueue(new EmailMessage(email, subject, html, text, "direct"))) sent++;
+            {
+                try
+                {
+                    await mailer.SendAsync(new EmailMessage(email, subject, html, text, "direct"), ct);
+                    sent++;
+                }
+                catch (Exception ex)
+                {
+                    errors.Add(ex is MailDeliveryException mail ? mail.Message : "الإرسال فشل");
+                }
+            }
+            if (errors.Count > 0)
+                throw new ApiException(503, sent == 0
+                    ? $"الإيميل ما اتبعتش: {errors[0]}"
+                    : $"اتبعت لـ {sent} وفشل الباقي: {errors[0]}", "email_failed");
             return Results.Ok(new { sent });
         });
 
@@ -246,7 +247,9 @@ public static class AdminEndpoints
                 .OrderByDescending(t => t.CreatedAt).Take(100)
                 .Join(db.Users.AsNoTracking(), t => t.UserId, u => u.Id, (t, u) => new
                 {
-                    t.Id, t.UserId, u.Email, u.Name, t.Method, amount = t.AmountMinor / 100m, t.Currency,
+                    t.Id, t.UserId, u.Email, u.Name, t.Method, t.Purpose, t.ProjectId, t.HostingTier, t.Interval,
+                    projectName = db.Projects.Where(p => p.Id == t.ProjectId).Select(p => p.Name).FirstOrDefault(),
+                    amount = t.AmountMinor / 100m, t.Currency,
                     t.Status, t.ReviewNote, t.CreatedAt, t.ReviewedAt, hasGoogle = u.GoogleId != null, hasApple = u.AppleId != null
                 })
                 .ToListAsync();
@@ -261,10 +264,10 @@ public static class AdminEndpoints
             return Results.File(stream, row.ContentType);
         });
 
-        g.MapPost("/wallet-transfers/{id:guid}/approve", async (Guid id, WalletTransferService wallet) =>
+        g.MapPost("/wallet-transfers/{id:guid}/approve", async (Guid id, WalletApprove req, WalletTransferService wallet) =>
         {
-            await wallet.ApproveAsync(id);
-            return Results.Ok(new { status = WalletTransferStatuses.Approved });
+            var row = await wallet.ApproveAsync(id, req.Interval);
+            return Results.Ok(new { status = row.Status, row.Interval, row.Purpose });
         });
 
         g.MapPost("/wallet-transfers/{id:guid}/reject", async (Guid id, WalletReview req, WalletTransferService wallet) =>

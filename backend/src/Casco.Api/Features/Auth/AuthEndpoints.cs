@@ -1,5 +1,7 @@
 using Casco.Api.Domain;
+using Casco.Api.Features.Auth;
 using Casco.Api.Features.Billing;
+using Casco.Api.Features.Notifications;
 using Casco.Api.Infrastructure;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -64,7 +66,7 @@ public static class AuthEndpoints
         var g = app.MapGroup("/api/auth").RequireRateLimiting("auth");
 
         g.MapPost("/register", async (RegisterRequest req, HttpContext http, AppDbContext db, TokenService tokens, TurnstileVerifier turnstile,
-            CreditService credits, TikTokEvents tiktok, IOptions<AppOptions> appOpt, IOptions<BillingOptions> billingOpt) =>
+            CreditService credits, TikTokEvents tiktok, WelcomeNotifier welcome, IOptions<AppOptions> appOpt, IOptions<BillingOptions> billingOpt) =>
         {
             ValidateCredentials(req.Email, req.Password);
             await turnstile.EnsureHumanAsync(req.TurnstileToken, http.Connection.RemoteIpAddress?.ToString(), http.RequestAborted);
@@ -74,6 +76,7 @@ public static class AuthEndpoints
 
             var user = await CreateUserAsync(db, credits, appOpt.Value, billingOpt.Value, email, req.Name, req.ReferralCode,
                 u => u.PasswordHash = HashPassword(req.Password));
+            await welcome.EnsureAsync(user, http.RequestAborted);
             tiktok.Registration(user, http, req.Ttclid, req.Ttp);
             return Results.Ok(new { token = tokens.CreateUserToken(user), id = user.Id });
         });
@@ -92,7 +95,7 @@ public static class AuthEndpoints
         });
 
         g.MapPost("/external", async (ExternalLoginRequest req, HttpContext http, AppDbContext db, TokenService tokens,
-            ExternalTokenValidator validator, CreditService credits, TikTokEvents tiktok, IOptions<AppOptions> appOpt, IOptions<BillingOptions> billingOpt) =>
+            ExternalTokenValidator validator, CreditService credits, TikTokEvents tiktok, WelcomeNotifier welcome, IOptions<AppOptions> appOpt, IOptions<BillingOptions> billingOpt) =>
         {
             var provider = (req.Provider ?? "").Trim().ToLowerInvariant();
             var identity = await validator.ValidateAsync(provider, req.IdToken ?? "", http.RequestAborted);
@@ -121,6 +124,7 @@ public static class AuthEndpoints
                         if (isGoogle) u.GoogleId = identity.Subject; else u.AppleId = identity.Subject;
                     });
                     created = true;
+                    await welcome.EnsureAsync(user, http.RequestAborted);
                     tiktok.Registration(user, http, req.Ttclid, req.Ttp);
                 }
             }

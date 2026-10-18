@@ -105,6 +105,7 @@ export interface TemplateInfo {
 
 export interface Me {
   user: { id: string; name: string; email: string; role: string; freeSiteUsed: boolean }
+  partner?: boolean
   plan: { key: 'free' | 'pro'; interval: string | null; periodEnd: string | null; isPro: boolean; daysLeft: number | null }
   credits: { plan: number; topup: number; reserved: number; available: number }
   limits: {
@@ -202,7 +203,7 @@ export interface Plans {
   pro: { monthlyPrice: number; yearlyPrice: number; monthlyCredits: number; maxProjects: number }
   topups: { id: string; credits: number; price: number }[]
   hosting: { staticMonthly: number; staticYearly: number; backendMonthly: number; backendYearly: number; reactYearly: number; graceDays: number }
-  wallet?: { amount: number; currency: string; phone: string; methods: string[] }
+  wallet?: { amount: number; yearlyAmount?: number; currency: string; phone: string; methods: string[]; serverAmount?: number; serverYearlyAmount?: number; serverCurrency?: string }
 }
 
 export type HostingTier = 'static' | 'backend'

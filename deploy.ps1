@@ -56,6 +56,10 @@ cd /opt/casco
 tar -xzf /tmp/casco-code.tgz
 rm -f /tmp/casco-code.tgz
 find /opt/casco/deploy \( -name '*.sh' -o -name '*.py' \) -exec sed -i 's/\r$//' {} +
+# The repo copy of pg_hba.conf is a template. Leaving SERVER1_IP makes Postgres refuse to start.
+if [ -f /opt/casco/deploy/server2/pg_hba.conf ]; then
+  sed -i 's/SERVER1_IP/86.48.5.19/g' /opt/casco/deploy/server2/pg_hba.conf
+fi
 '@
     Invoke-Casco $server1 $extract
     Invoke-Casco $server2 $extract
@@ -65,6 +69,8 @@ find /opt/casco/deploy \( -name '*.sh' -o -name '*.py' \) -exec sed -i 's/\r$//'
 set -euo pipefail
 python3 /opt/casco/deploy/server2/import-env.py server1
 cd /opt/casco/deploy/server1
+mkdir -p data/sites data/uploads data/logs data/wallet-proofs
+chown -R 1654:1654 data
 docker compose build api </dev/null
 docker compose up -d
 ok=0

@@ -253,6 +253,41 @@ public static class EmailCopy
         };
     }
 
+    /// <summary>Tells every customer they can publish a site and get a link free for three days.</summary>
+    public static EmailContent FreePublish(string lang, string name, string homeUrl)
+    {
+        var dashboard = L(lang, "لوحة التحكم", "Dashboard", "डैशबोर्ड");
+        var data = L(lang, "البيانات", "Data", "डेटा");
+        var publish = L(lang, "نشر", "Publish", "पब्लिश");
+        var hello = string.IsNullOrWhiteSpace(name)
+            ? L(lang, "مرحباً،", "Hi,", "नमस्ते,")
+            : Hello(lang, name.Trim());
+        return new EmailContent
+        {
+            Lang = lang,
+            Tone = EmailTone.Success,
+            Badge = L(lang, "نشر مجاني", "Free publish", "मुफ़्त पब्लिश"),
+            Subject = L(lang, "انشر موقعك مجاناً على Casco", "Publish your site on Casco for free", "अपनी साइट Casco पर मुफ़्त पब्लिश करें"),
+            Preheader = L(lang, "ادخل على Casco Studio، اختَر موقعك، وخد الرابط مجاناً لمدة 3 أيام.", "Open Casco Studio, choose your site, and get a free link for 3 days.", "Casco Studio खोलें, अपनी साइट चुनें, और 3 दिन का मुफ़्त लिंक पाएँ."),
+            Title = L(lang, "تقدر تنشر موقعك مجاناً الآن", "You can publish your site for free now", "आप अभी अपनी साइट मुफ़्त पब्लिश कर सकते हैं"),
+            Paragraphs =
+            [
+                hello + " " + L(lang,
+                    "تقدر دلوقتي تنشر موقعك على Casco وتاخد رابط شغال مجاناً لمدة 3 أيام.",
+                    "you can publish your site on Casco now and get a live link free for 3 days.",
+                    "आप अब अपनी साइट Casco पर पब्लिश कर सकते हैं और 3 दिन के लिए मुफ़्त लाइव लिंक पा सकते हैं."),
+                L(lang, $"ادخل على Casco Studio من هنا: {homeUrl}", $"Open Casco Studio here: {homeUrl}", $"Casco Studio यहाँ खोलें: {homeUrl}"),
+                L(lang, $"1. اضغط زر «{dashboard}».", $"1. Press the \"{dashboard}\" button.", $"1. \"{dashboard}\" बटन दबाएँ."),
+                L(lang, "2. اختر موقعك.", "2. Choose your site.", "2. अपनी साइट चुनें."),
+                L(lang, $"3. اضغط زر «{data}» لإدارة بيانات الموقع.", $"3. Press the \"{data}\" button to manage the site data.", $"3. साइट का डेटा मैनेज करने के लिए \"{data}\" बटन दबाएँ."),
+                L(lang, $"4. افتح الموقع واضغط زر «{publish}».", $"4. Open the site and press the \"{publish}\" button.", $"4. साइट खोलें और \"{publish}\" बटन दबाएँ."),
+                L(lang, "5. اختَر الاسم الذي تفضّله.", "5. Choose the name you prefer.", "5. जो नाम आपको पसंद हो उसे चुनें."),
+                L(lang, "6. هتاخد رابط موقعك مجاناً الآن. الرابط يفضل شغال 3 أيام، وبعدها فعّل الاستضافة عشان يفضل منشور.", "6. You get your site link free now. The link stays online for 3 days, then turn on hosting to keep it published.", "6. आपको अभी अपनी साइट का लिंक मुफ़्त मिल जाएगा। लिंक 3 दिन ऑनलाइन रहता है, उसके बाद होस्टिंग चालू करें ताकि साइट पब्लिश रहे.")
+            ],
+            Button = new(L(lang, "افتح Casco Studio", "Open Casco Studio", "Casco Studio खोलें"), homeUrl)
+        };
+    }
+
     public static string ProItem(string lang, string? interval) => interval == "yearly"
         ? L(lang, "Casco Pro — سنوي", "Casco Pro — yearly", "Casco Pro — वार्षिक")
         : L(lang, "Casco Pro — شهري", "Casco Pro — monthly", "Casco Pro — मासिक");

@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowUpRight, Globe, Upload } from 'lucide-react'
+import { ServerWalletPay } from '../components/ServerWalletPay'
 import { Alert, Button, Card, Input, Spinner } from '../components/ui'
 import { errorMessage, get, post } from '../lib/api'
 import { formatDate, t } from '../lib/i18n'
@@ -172,6 +173,7 @@ function ManageReact({ id }: { id: string }) {
                 {t('جدّد الاستضافة')}
               </Button>
             )}
+            <ServerWalletPay projectId={id} period="yearly" />
 
             <div>
               <p className="text-sm text-slate-600">{t('ملف dist هو ناتج npm run build. اضغط المجلد أو محتوياته في ملف zip، ولازم يكون فيه index.html.')}</p>

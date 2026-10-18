@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 using Casco.Api.Domain;
 using Casco.Api.Infrastructure;
 using Microsoft.EntityFrameworkCore;
@@ -8,15 +7,16 @@ using Microsoft.EntityFrameworkCore;
 namespace Casco.Api.Features.Desktop;
 
 /// <summary>
-/// A new computer gets one free prompt, then five hours after the download link is shared in five groups.
-/// The hours stay on the machine. A subscribed account is not limited by this.
+/// A new computer gets one free prompt, then five minutes measured from the first opening after download.
+/// Sharing in five groups unlocks those hours. The clock keeps running while the app is closed.
+/// A subscribed account is not limited by this.
 /// </summary>
 public static class DesktopTrial
 {
     public const int Groups = 5;
     public const string MachineHeader = "X-Casco-Machine";
     public const string DownloadUrl = "https://casco.studio/download";
-    public static readonly TimeSpan Duration = TimeSpan.FromHours(5);
+    public static readonly TimeSpan Duration = TimeSpan.FromMinutes(5);
 
     public sealed record Access(
         bool IsPro,
@@ -68,7 +68,7 @@ public static class DesktopTrial
         {
             row.ShareMask |= 1 << (slot - 1);
             if (CountShares(row.ShareMask) >= Groups && row.FreePromptUsed)
-                row.TrialEndsAt = DateTime.UtcNow.Add(Duration);
+                row.TrialEndsAt = TrialDeadline(row, DateTime.UtcNow);
             await db.SaveChangesAsync(ct);
         }
         return Describe(row, DateTime.UtcNow);
@@ -84,29 +84,11 @@ public static class DesktopTrial
         await db.SaveChangesAsync(ct);
     }
 
-    public static async Task LogAsync(AppDbContext db, Guid userId, string? machine, string model, string? text, CancellationToken ct)
+    /// <summary>Five wall-clock minutes from the machine's first open. An older install that already passed that window still receives five minutes from the moment it is unlocked.</summary>
+    private static DateTime TrialDeadline(DesktopMachine row, DateTime now)
     {
-        var clean = (text ?? "").Replace('\0', ' ').Trim();
-        if (clean.Length == 0) return;
-        if (clean.Length > 2000) clean = clean[..2000];
-        db.DesktopChatMessages.Add(new DesktopChatMessage
-        {
-            UserId = userId,
-            MachineHash = Hash(machine) ?? "",
-            Model = model.Length > 80 ? model[..80] : model,
-            Text = clean,
-        });
-        await db.SaveChangesAsync(ct);
-    }
-
-    public static string PromptText(JsonElement body)
-    {
-        if (body.TryGetProperty("prompt", out var prompt) && prompt.ValueKind == JsonValueKind.String)
-        {
-            var text = (prompt.GetString() ?? "").Trim();
-            if (text.Length > 0) return text;
-        }
-        return "";
+        var fromDownload = row.CreatedAt.Add(Duration);
+        return fromDownload > now ? fromDownload : now.Add(Duration);
     }
 
     private static Access Describe(DesktopMachine row, DateTime now)

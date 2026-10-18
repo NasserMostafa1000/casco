@@ -51,7 +51,7 @@ document.addEventListener("click",function(e){var a=e.target.closest&&e.target.c
     }
 }
 
-/// <param name="Active">False once the site's hosting has lapsed beyond the grace period, or while an admin suspends it.</param>
+/// <param name="Active">False once a paid hosting plan has lapsed beyond the grace period, or while an admin suspends the site. A published site with no hosting plan stays visible; its backend APIs stay closed.</param>
 /// <param name="Spa">A React build: unknown paths without an extension fall back to index.html.</param>
 public record SiteResolution(Guid ProjectId, string Directory, bool Active, bool Spa);
 
@@ -79,12 +79,14 @@ public class SiteResolver(IServiceScopeFactory scopes, IMemoryCache cache, IOpti
             var slug = host.EndsWith(suffix) ? host[..^suffix.Length] : null;
             var match = await published
                 .Where(p => (slug != null && p.Slug == slug) || (p.CustomDomain == host && p.CustomDomainVerified))
-                .Select(p => new { p.Id, p.HostingTier, p.HostingPaidUntil, p.IsAdminSuspended, p.TemplateKey })
+                .Select(p => new { p.Id, p.HostingTier, p.HostingPaidUntil, p.HostingTrial, p.IsAdminSuspended, p.TemplateKey })
                 .FirstOrDefaultAsync();
             if (match is not null)
             {
-                var active = !match.IsAdminSuspended && HostingTiers.Rank(match.HostingTier) > 0 && match.HostingPaidUntil is { } end
-                             && end.AddDays(billing.Value.Hosting.GraceDaysFor(match.HostingTier)) > DateTime.UtcNow;
+                var now = DateTime.UtcNow;
+                var paid = HostingTiers.Rank(match.HostingTier) > 0 && match.HostingPaidUntil is { } end
+                           && (match.HostingTrial ? end > now : end.AddDays(billing.Value.Hosting.GraceDaysFor(match.HostingTier)) > now);
+                var active = !match.IsAdminSuspended && (paid || match.HostingTier == null);
                 result = new SiteResolution(match.Id, SiteDirectory(match.Id), active, match.TemplateKey == HostingTiers.React);
             }
         }
@@ -227,7 +229,7 @@ public class PublishService(AppDbContext db, SiteResolver resolver, Subscription
 {
     private readonly AppOptions _opt = options.Value;
 
-    public async Task<string> PublishAsync(Project project)
+    public async Task<PublishResult> PublishAsync(Project project)
     {
         SiteSuspension.EnsureNotSuspended(project);
         if (project.TemplateKey == HostingTiers.React)
@@ -235,7 +237,8 @@ public class PublishService(AppDbContext db, SiteResolver resolver, Subscription
         var version = await db.ProjectVersions.FindAsync(project.CurrentVersionId) ?? throw ApiException.BadRequest("لا توجد نسخة للنشر");
         var files = SiteFiles.Parse(version.FilesJson);
         var required = HostingService.RequiredTier(files);
-        if (!hosting.IsActive(project, required)) throw hosting.HostingRequired(required);
+        if (!hosting.IsActive(project, required) && !hosting.TryStartTrial(project, required))
+            throw hosting.HostingRequired(required);
         var plan = await subscriptions.GetPlanAsync(project.UserId);
 
         var root = Path.GetFullPath(Path.Combine(_opt.DataPath, "sites"));
@@ -270,7 +273,8 @@ public class PublishService(AppDbContext db, SiteResolver resolver, Subscription
         project.PublishedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
         hosting.Invalidate(project);
-        return ProjectEndpoints.SiteUrl(_opt, project.Slug, project.CustomDomain, project.CustomDomainVerified);
+        var url = ProjectEndpoints.SiteUrl(_opt, project.Slug, project.CustomDomain, project.CustomDomainVerified);
+        return new PublishResult(url, project.HostingTrial ? project.HostingPaidUntil : null);
     }
 
     public async Task UnpublishAsync(Project project)
@@ -283,6 +287,7 @@ public class PublishService(AppDbContext db, SiteResolver resolver, Subscription
     }
 }
 
+public record PublishResult(string Url, DateTime? TrialUntil);
 public record SlugRequest(string Slug);
 public record DomainRequest(string? Domain);
 
@@ -295,7 +300,8 @@ public static class PublishingEndpoints
         g.MapPost("/publish", async (Guid id, HttpContext http, ProjectService projects, PublishService publisher) =>
         {
             var project = await projects.GetOwnedAsync(id, http.User.UserId());
-            return Results.Ok(new { url = await publisher.PublishAsync(project) });
+            var published = await publisher.PublishAsync(project);
+            return Results.Ok(new { url = published.Url, trialUntil = published.TrialUntil });
         });
 
         g.MapGet("/hosting", async (Guid id, HttpContext http, ProjectService projects, HostingService hosting) =>

@@ -122,6 +122,11 @@ public partial class AgentTaskRunner(
 {
     private readonly AgentOptions _opt = options.Value;
     private const int MaxReadRounds = 2;
+    // A free website request keeps fixing until the site is clean. The caps only stop a model that is stuck;
+    // hitting them fails the task instead of saying the site is finished.
+    private const int FreeDirtyCap = 16;
+    private const int FreeSameErrorCap = 4;
+    private const int FreeQuestionCap = 4;
     private const string CrashMessage = "توقف الخادم أثناء التنفيذ، أعد المحاولة";
 
     public async Task RunAsync(Guid taskId, CancellationToken stoppingToken)
@@ -189,7 +194,7 @@ public partial class AgentTaskRunner(
 
     private EditConstraints Constraints(PlanInfo plan) => plan.IsPro
         ? new EditConstraints(false, _opt.ProMaxFiles, _opt.MaxFileBytes, _opt.ProMaxTotalBytes)
-        : new EditConstraints(true, _opt.MaxFiles, _opt.MaxFileBytes, _opt.MaxTotalBytes);
+        : new EditConstraints(false, _opt.MaxFiles, _opt.MaxFileBytes, _opt.MaxTotalBytes);
 
     private async Task ExecuteAsync(AgentTask task, Project project, TaskStream stream, CancellationToken ct)
     {
@@ -207,6 +212,7 @@ public partial class AgentTaskRunner(
         var singlePage = false;
         var constraints = Constraints(plan);
         var limits = new SiteLimits(constraints.MaxFiles, constraints.MaxTotalBytes);
+        SiteValidator.Repair(files);
         var baselineErrors = SiteValidator.Validate(files, singlePage).Select(e => e.Error).ToHashSet();
 
         var history = (await db.ChatMessages.Where(m => m.ProjectId == project.Id && m.TaskId != task.Id)
@@ -247,6 +253,11 @@ public partial class AgentTaskRunner(
         var attempt = 0;
         // Rounds where the model asked to see files from the site map.
         var readRounds = 0;
+        var askedBuild = false;
+        var buildNudges = 0;
+        var freeDirtyRounds = 0;
+        var freeSameErrors = 0;
+        var freeErrorSignature = "";
         // State after the last completed part: a part that cannot finish is dropped as a whole, never kept half-applied.
         var completedParts = 0;
         var good = (Files: files, Remaining: (string?)null, Changed: new HashSet<string>(StringComparer.Ordinal));
@@ -310,6 +321,20 @@ public partial class AgentTaskRunner(
             }
             else if (QuestionJson(parsed) is { } questionsJson && (parsed.Files?.Count ?? 0) == 0 && !anyChange)
             {
+                // A free website request is a build. Questions do not finish it.
+                if (task.Kind == TaskKinds.Generate && (!askedBuild || task.IsFreeGrant))
+                {
+                    askedBuild = true;
+                    buildNudges++;
+                    if (task.IsFreeGrant && buildNudges > FreeQuestionCap)
+                    {
+                        await FailAsync(task, "الموقع لسه ما اتبناش، ومش هقدر أقول إنه خلص.", ReleaseReasons.Failed, templateHint: false);
+                        return;
+                    }
+                    messages.Add(new ChatMessageDto("assistant", Truncate(result.Content, 2000)));
+                    messages.Add(new ChatMessageDto("user", "The request already describes the website. Do not ask. Build the pages now. Use a sensible default for any detail that was not specified, and mention that default in the summary. Return the files."));
+                    continue;
+                }
                 var ask = string.IsNullOrWhiteSpace(parsed.Summary) ? "محتاج أعرف التفاصيل دي قبل ما أكمّل." : parsed.Summary.Trim();
                 await CompleteAsync(task, project, null, ask, plan, questionsJson);
                 return;
@@ -342,27 +367,59 @@ public partial class AgentTaskRunner(
                 remaining = string.IsNullOrWhiteSpace(parsed.Remaining) ? null : parsed.Remaining.Trim();
                 var applied = EditApplier.Apply(files, parsed, constraints);
                 files = applied.Files;
+                SiteValidator.Repair(files);
                 changed.UnionWith(applied.Changed);
                 partChanged |= applied.Changed.Count > 0;
                 anyChange |= applied.Changed.Count > 0;
 
-                var newValidation = SiteValidator.Validate(files, singlePage)
-                    .Where(e => !baselineErrors.Contains(e.Error))
-                    .Where(e => remaining is null || !SiteValidator.IsMissingPage(e.Error))
-                    .ToList();
-                if (isNewSite)
+                var newValidation = new List<(string Path, string Error)>();
+                if (task.IsFreeGrant)
                 {
-                    IEnumerable<string> scope = string.IsNullOrWhiteSpace(parsed.Remaining) ? files.Keys : applied.Changed;
-                    newValidation.AddRange(SiteValidator.ReactShellErrors(files, scope).Select(e => (Path: "", Error: e)));
+                    // Every error blocks "the site is finished", including errors that were already in the template.
+                    // Pages promised in "remaining" may be missing until the model says the build is done.
+                    newValidation = SiteValidator.CompletionErrors(files, isNewSite);
+                    if (remaining is not null)
+                        newValidation.RemoveAll(e => SiteValidator.IsMissingPage(e.Error));
+                    remainingErrors = applied.Errors.Concat(newValidation.Select(e => e.Error)).Distinct().ToList();
                 }
-                remainingErrors = applied.Errors.Concat(newValidation.Select(e => e.Error)).ToList();
+                else
+                {
+                    newValidation = SiteValidator.Validate(files, singlePage)
+                        .Where(e => !baselineErrors.Contains(e.Error))
+                        .Where(e => remaining is null || !SiteValidator.IsMissingPage(e.Error))
+                        .ToList();
+                    if (isNewSite)
+                    {
+                        IEnumerable<string> scope = string.IsNullOrWhiteSpace(parsed.Remaining) ? files.Keys : applied.Changed;
+                        newValidation.AddRange(SiteValidator.ReactShellErrors(files, scope).Select(e => (Path: "", Error: e)));
+                    }
+                    remainingErrors = applied.Errors.Concat(newValidation.Select(e => e.Error)).ToList();
+                }
 
-                if (applied.LimitReached)
+                if (task.IsFreeGrant && remainingErrors.Count > 0)
+                {
+                    var signature = string.Join("\n", remainingErrors.Order(StringComparer.Ordinal));
+                    freeDirtyRounds++;
+                    freeSameErrors = signature == freeErrorSignature ? freeSameErrors + 1 : 1;
+                    freeErrorSignature = signature;
+                    if (freeDirtyRounds >= FreeDirtyCap || freeSameErrors >= FreeSameErrorCap)
+                    {
+                        await FailUnfinishedAsync(task, remainingErrors);
+                        return;
+                    }
+                    if (!partChanged) await ai.InvalidateAsync(result.CacheKey);
+                    var affected = applied.Affected.Concat(newValidation.Select(e => e.Path)).Where(p => p.Length > 0);
+                    if (newValidation.Any(e => e.Path.Length == 0))
+                        affected = affected.Concat(files.Keys.Where(k => k.EndsWith(".html", StringComparison.OrdinalIgnoreCase) || k.EndsWith(".js", StringComparison.OrdinalIgnoreCase)));
+                    messages.Add(new ChatMessageDto("assistant", Truncate(result.Content, 6000)));
+                    messages.Add(new ChatMessageDto("user", PromptBuilder.FeedbackMessage(remainingErrors, files, affected)));
+                }
+                else if (applied.LimitReached)
                 {
                     stop = BuildStop.Limit;
                     partDone = true;
                 }
-                else if (remainingErrors.Count == 0 || (parsed.Files?.Count ?? 0) == 0) partDone = true;
+                else if (remainingErrors.Count == 0 || (!task.IsFreeGrant && (parsed.Files?.Count ?? 0) == 0)) partDone = true;
                 else
                 {
                     if (!partChanged) await ai.InvalidateAsync(result.CacheKey);
@@ -408,6 +465,15 @@ public partial class AgentTaskRunner(
             if (stop == BuildStop.OutOfCredits)
                 throw new ApiException(402, "رصيدك من النقاط انتهى قبل تنفيذ الطلب. اشحن رصيدك ثم أعد المحاولة.");
             if (stop == BuildStop.Limit) throw new ApiException(422, LimitMessage(constraints));
+            if (task.IsFreeGrant)
+            {
+                var blocking = SiteValidator.CompletionErrors(files, isNewSite);
+                if (blocking.Count > 0)
+                {
+                    await FailUnfinishedAsync(task, blocking.Select(e => e.Error));
+                    return;
+                }
+            }
             if (!string.IsNullOrWhiteSpace(summary) && remainingErrors.Count == 0)
             {
                 // The model asked a clarifying question instead of editing.
@@ -463,6 +529,18 @@ public partial class AgentTaskRunner(
         string? remaining, BuildStop stop, int parts, IReadOnlyCollection<string> changed, bool hadErrors, IReadOnlyList<string>? thoughts = null)
     {
         files = SiteFiles.ReplaceTokens(files, project.Name, project.Description);
+        if (task.IsFreeGrant)
+        {
+            SiteValidator.Repair(files);
+            var blocking = SiteValidator.CompletionErrors(files, task.Kind == TaskKinds.Generate);
+            if (remaining is not null)
+                blocking.RemoveAll(e => SiteValidator.IsMissingPage(e.Error));
+            if (blocking.Count > 0)
+            {
+                await FailUnfinishedAsync(task, blocking.Select(e => e.Error));
+                return;
+            }
+        }
         if (task.Kind == TaskKinds.Generate && project.Name == ProjectService.AutoName(project.Description)
             && ProjectService.NameFromTitle(files) is { } brand)
             project.Name = brand;
@@ -604,7 +682,7 @@ public partial class AgentTaskRunner(
         task.ResultVersionId = versionId;
         task.CompletedAt = DateTime.UtcNow;
 
-        if (!plan.IsPro && task.Kind == TaskKinds.Generate && versionId is not null)
+        if (!plan.IsPro && task.Kind == TaskKinds.Generate && versionId is not null && task.Remaining is null)
         {
             var b = billing.Value;
             message += $"\n\nموقعك جاهز للمعاينة! لنشره على سيرفرات Casco فعّل الاستضافة ({BillingOptions.Dollars(b.Hosting.StaticMonthlyMinor)} شهرياً، " +
@@ -620,7 +698,14 @@ public partial class AgentTaskRunner(
         SiteContext.Invalidate(cache, project.SiteKey);
     }
 
-    private async Task FailAsync(AgentTask task, string error, string reason = ReleaseReasons.Failed)
+    private Task FailUnfinishedAsync(AgentTask task, IEnumerable<string> errors)
+    {
+        var lines = string.Join("\n", errors.Where(e => !string.IsNullOrWhiteSpace(e)).Distinct().Take(12).Select(e => "- " + e));
+        return FailAsync(task, "الموقع لسه فيه أخطاء، ومش هقدر أقول إنه خلص قبل ما تتعالج كلها:\n" + lines,
+            ReleaseReasons.Failed, templateHint: false);
+    }
+
+    private async Task FailAsync(AgentTask task, string error, string reason = ReleaseReasons.Failed, bool templateHint = true)
     {
         db.ChangeTracker.Clear();
         var fresh = await db.AgentTasks.FindAsync(task.Id);
@@ -633,7 +718,7 @@ public partial class AgentTaskRunner(
         fresh.CompletedAt = DateTime.UtcNow;
         var charged = !fresh.IsFreeGrant && fresh.CostUsd > 0 ? credits.CreditsForCost(fresh.CostUsd) : 0;
         fresh.CreditsCharged = charged;
-        var hint = fresh.Kind == TaskKinds.Generate
+        var hint = templateHint && fresh.Kind == TaskKinds.Generate
             ? "\n\nلا تقلق، موقعك الأساسي جاهز من القالب ويمكنك طلب التعديلات عليه."
             : "";
         db.ChatMessages.Add(new ChatMessage { ProjectId = fresh.ProjectId, Role = "assistant", Content = $"⚠️ {error}{hint}", TaskId = fresh.Id, Credits = charged });

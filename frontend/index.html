@@ -14,13 +14,26 @@
       } catch (e) {}
     </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="description" content="Casco Studio is an AI code studio and code editor, like Cursor and Claude. Write and edit code with an agent, and build complete websites with hosting in Arabic, English, or Hindi." />
+    <meta name="description" content="Casco Studio is an AI code studio and code editor. An agent writes and edits code with you, and you can build complete websites with hosting in Arabic, English, or Hindi." />
     <meta name="robots" content="index, follow" />
     <link rel="canonical" href="https://casco.studio/" />
+    <script>
+      try {
+        var path = location.pathname || '/'
+        var blocked = path === '/download' || path.indexOf('/download/') === 0 || path === '/app' || path.indexOf('/app/') === 0
+        if (blocked) {
+          var robots = document.querySelector('meta[name="robots"]')
+          if (robots) robots.setAttribute('content', 'noindex, nofollow')
+          var canonical = document.querySelector('link[rel="canonical"]')
+          var clean = path.length > 1 && path.charAt(path.length - 1) === '/' ? path.slice(0, -1) : path
+          if (canonical) canonical.setAttribute('href', 'https://casco.studio' + clean)
+        }
+      } catch (e) {}
+    </script>
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://casco.studio/" />
     <meta property="og:title" content="Casco Studio | AI Code Studio and Code Editor" />
-    <meta property="og:description" content="An AI code studio and code editor, like Cursor and Claude. Write code with an agent and build complete websites." />
+    <meta property="og:description" content="An AI code studio and code editor. An agent writes and edits code with you, and you can build complete websites." />
     <meta property="og:image" content="https://casco.studio/og-image.png" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -46,7 +59,7 @@
             "name": "Casco Studio",
             "applicationCategory": "DeveloperApplication",
             "operatingSystem": "Windows 10, macOS",
-            "description": "Casco Studio is an AI code studio and code editor, like Cursor and Claude. It writes and edits code with an agent and builds complete websites.",
+            "description": "Casco Studio is an AI code studio and code editor. An agent writes and edits code with you, and it builds complete websites.",
             "url": "https://casco.studio/download",
             "downloadUrl": "https://casco.studio/download",
             "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
@@ -65,25 +78,27 @@
           },
           {
             "@type": "Product",
-            "name": "Casco website build",
-            "description": "Customers pay 18 USD or 180 USD once for their website code and the work of building their website. That amount is not paid again to keep the site online. The site stays up and working, but they cannot update the code with AI.",
+            "name": "Casco Pro",
+            "description": "Casco Pro is a monthly or yearly subscription for the AI code studio and code editor. An agent writes and edits code with you, and you can build websites from the same place. Hosting is a separate charge for each site.",
             "url": "https://casco.studio/pricing",
             "brand": { "@id": "https://casco.studio/#organization" },
             "offers": [
               {
                 "@type": "Offer",
-                "name": "Website build, 18 USD",
+                "name": "Casco Pro monthly",
                 "price": "18",
                 "priceCurrency": "USD",
-                "description": "One-time payment for the website code and the work of building it. The site stays online without paying this again, but the code cannot be updated with AI.",
+                "availability": "https://schema.org/InStock",
+                "description": "Monthly subscription for the code studio and editor. An agent writes and edits code with you.",
                 "url": "https://casco.studio/pricing"
               },
               {
                 "@type": "Offer",
-                "name": "Website build, 180 USD",
+                "name": "Casco Pro yearly",
                 "price": "180",
                 "priceCurrency": "USD",
-                "description": "One-time payment for the website code and the work of building it. The site stays online without paying this again, but the code cannot be updated with AI.",
+                "availability": "https://schema.org/InStock",
+                "description": "Yearly subscription for the code studio and editor. An agent writes and edits code with you.",
                 "url": "https://casco.studio/pricing"
               }
             ]
@@ -108,12 +123,12 @@
     <div id="root"></div>
     <noscript>
       <h1>Casco Studio</h1>
-      <p>Casco Studio استوديو ومحرر أكواد بالذكاء الاصطناعي مثل Cursor و Claude. اكتب الكود وعدّله مع الوكيل، وابنِ مواقع كاملة بالعربية والإنجليزية والهندية مع الاستضافة.</p>
-      <p>Casco Studio is an AI code studio and code editor, like Cursor and Claude. Write and edit code with an agent, and build complete websites in Arabic, English, or Hindi, with hosting.</p>
+      <p>Casco Studio استوديو ومحرر أكواد بالذكاء الاصطناعي. وكيل يكتب الكود ويعدّله معك، وتبني مواقع كاملة بالعربية والإنجليزية والهندية مع الاستضافة.</p>
+      <p>Casco Studio is an AI code studio and code editor. An agent writes and edits code with you, and you can build complete websites in Arabic, English, or Hindi, with hosting.</p>
       <p>مالك شركة Casco هو ناصر مصطفي البربري. الهاتف +971569166263. البريد nassermostafa.ma122@gmail.com. البروفايل الشخصي الوحيد: https://nasser.chat</p>
       <p>Nasser Mostafa El Barbary is the owner of Casco. Phone +971569166263. Email nassermostafa.ma122@gmail.com. His only personal profile is https://nasser.chat.</p>
-      <p>العميل يدفع 18 دولار أو 180 دولار مرة واحدة فقط مقابل كود موقعه ومهمة بنائه. المبلغ مش بيتدفع تاني عشان الموقع يفضل شغال. الموقع هيفضل شغال عادي، لكن مش هيقدر يحدّث الكود بالذكاء الاصطناعي. https://casco.studio/pricing</p>
-      <p>The customer pays 18 USD or 180 USD once for their website code and the work of building their website. That amount is not paid again to keep the site online. The site stays up and working, but they cannot update the code with AI. https://casco.studio/pricing</p>
+      <p>Casco Pro اشتراك 18 دولار شهرياً أو 180 دولار سنوياً لاستوديو ومحرر الأكواد. الوكيل يكتب الكود ويعدّله معك، وتقدر تبني مواقع من نفس المكان. الاستضافة حساب منفصل لكل موقع. https://casco.studio/pricing</p>
+      <p>Casco Pro is 18 USD per month or 180 USD per year for the AI code studio and code editor. An agent writes and edits code with you, and you can build websites from the same place. Hosting is a separate charge for each site. https://casco.studio/pricing</p>
       <p><a href="https://casco.studio/download">تنزيل Casco Studio للويندوز والماك</a> — <a href="https://casco.studio/download">Download Casco Studio for Windows and Mac</a></p>
     </noscript>
     <script type="module" src="/src/main.tsx"></script>

@@ -137,7 +137,7 @@ public class UserEmails(AppDbContext db, EmailQueue queue, IOptions<AppOptions> 
 
         var grace = b.Hosting.GraceDays;
         var sites = await db.Projects.AsNoTracking()
-            .Where(p => p.HostingTier != null && p.PublishedAt != null && !p.IsAdminSuspended && p.HostingPaidUntil != null
+            .Where(p => p.HostingTier != null && p.PublishedAt != null && !p.IsAdminSuspended && !p.HostingTrial && p.HostingPaidUntil != null
                         && p.HostingPaidUntil > now.AddDays(-(grace + 3)) && p.HostingPaidUntil <= now.AddDays(7))
             .Join(db.Users, p => p.UserId, u => u.Id, (p, u) => new
             {

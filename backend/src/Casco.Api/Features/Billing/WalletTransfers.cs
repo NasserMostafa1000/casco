@@ -33,17 +33,41 @@ public class WalletProofStore(IOptions<AppOptions> options)
     }
 }
 
-public class WalletTransferService(AppDbContext db, SubscriptionService subscriptions, WalletProofStore proofs)
+public record WalletApprove(string? Interval);
+
+public class WalletTransferService(AppDbContext db, SubscriptionService subscriptions, WalletProofStore proofs, HostingService? hosting = null)
 {
     public const int MaxBytes = 4 * 1024 * 1024;
 
-    public async Task<WalletTransfer> SubmitAsync(Guid userId, string method, Stream body, CancellationToken ct)
+    public async Task<WalletTransfer> SubmitAsync(Guid userId, string method, Stream body, CancellationToken ct, string? interval = null)
     {
         if (!WalletMethods.IsValid(method))
             throw ApiException.BadRequest("اختَر فودافون كاش أو إنستا باي");
-        if (await db.WalletTransfers.AnyAsync(t => t.UserId == userId && t.Status == WalletTransferStatuses.Pending, ct))
+        if (await db.WalletTransfers.AnyAsync(t => t.UserId == userId && t.Status == WalletTransferStatuses.Pending && t.Purpose != WalletPurposes.Server, ct))
             throw ApiException.Conflict("عندك تحويل قيد المراجعة. استنى الموافقة أو الرفض قبل ما تبعت صورة جديدة.", "wallet_pending");
 
+        var period = interval == BillingIntervals.Yearly ? BillingIntervals.Yearly : BillingIntervals.Monthly;
+        var row = await StoreAsync(userId, method, WalletPurposes.Pro, null, null, WalletPay.ForInterval(period), WalletPay.Currency, body, ct, period);
+        return row;
+    }
+
+    public async Task<WalletTransfer> SubmitServerAsync(Guid userId, Guid projectId, string method, Stream body, CancellationToken ct, string? interval = null)
+    {
+        if (hosting is null) throw ApiException.BadRequest("دفع السيرفر غير متاح");
+        if (!WalletMethods.IsValid(method))
+            throw ApiException.BadRequest("اختَر فودافون كاش أو إنستا باي");
+        var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == projectId && p.UserId == userId, ct)
+                      ?? throw ApiException.NotFound("الموقع غير موجود");
+        Casco.Api.Features.Admin.SiteSuspension.EnsureNotSuspended(project);
+        if (await db.WalletTransfers.AnyAsync(t => t.UserId == userId && t.ProjectId == projectId && t.Purpose == WalletPurposes.Server && t.Status == WalletTransferStatuses.Pending, ct))
+            throw ApiException.Conflict("تحويل السيرفر ده قيد المراجعة.", "wallet_pending");
+        var tier = project.TemplateKey == HostingTiers.React ? HostingTiers.React : await hosting.RequiredTierAsync(project);
+        var period = interval == BillingIntervals.Yearly || tier == HostingTiers.React ? BillingIntervals.Yearly : BillingIntervals.Monthly;
+        return await StoreAsync(userId, method, WalletPurposes.Server, project.Id, tier, ServerWalletPay.ForInterval(period), ServerWalletPay.Currency, body, ct, period);
+    }
+
+    private async Task<WalletTransfer> StoreAsync(Guid userId, string method, string purpose, Guid? projectId, string? tier, int amountMinor, string currency, Stream body, CancellationToken ct, string? interval = null)
+    {
         await using var buffer = new MemoryStream();
         await body.CopyToAsync(buffer, ct);
         if (buffer.Length is 0 or > MaxBytes) throw ApiException.BadRequest("ارفع صورة التحويل (حد أقصى 4 ميجا)");
@@ -54,8 +78,12 @@ public class WalletTransferService(AppDbContext db, SubscriptionService subscrip
         {
             UserId = userId,
             Method = method,
-            AmountMinor = WalletPay.AmountMinor,
-            Currency = WalletPay.Currency,
+            Purpose = purpose,
+            ProjectId = projectId,
+            HostingTier = tier,
+            Interval = interval,
+            AmountMinor = amountMinor,
+            Currency = currency,
             ContentType = ext == ".png" ? "image/png" : ext == ".webp" ? "image/webp" : "image/jpeg"
         };
         row.ProofKey = await proofs.SaveAsync(row.Id, new MemoryStream(bytes), ext, ct);
@@ -64,17 +92,30 @@ public class WalletTransferService(AppDbContext db, SubscriptionService subscrip
         return row;
     }
 
-    public async Task ApproveAsync(Guid id)
+    public async Task<WalletTransfer> ApproveAsync(Guid id, string? interval = null)
     {
         var row = await db.WalletTransfers.FirstOrDefaultAsync(t => t.Id == id)
                   ?? throw ApiException.NotFound("التحويل غير موجود");
-        if (row.Status == WalletTransferStatuses.Approved) return;
+        if (row.Status == WalletTransferStatuses.Approved) return row;
         if (row.Status != WalletTransferStatuses.Pending)
             throw ApiException.BadRequest("التحويل ده اتراجع قبل كده");
+        if (row.Purpose == WalletPurposes.Server)
+        {
+            var period = row.Interval == BillingIntervals.Yearly ? BillingIntervals.Yearly : interval;
+            if (period is not (BillingIntervals.Weekly or BillingIntervals.Monthly or BillingIntervals.Yearly))
+                throw ApiException.BadRequest("اختَر تفعيل أسبوعي أو شهري أو سنوي");
+            if (row.ProjectId is null || string.IsNullOrEmpty(row.HostingTier))
+                throw ApiException.BadRequest("تحويل السيرفر ناقص الموقع");
+            if (hosting is null) throw ApiException.BadRequest("دفع السيرفر غير متاح");
+            row.Interval = period;
+            await hosting.GrantAsync(row.ProjectId.Value, row.HostingTier, period == BillingIntervals.Monthly, period == BillingIntervals.Yearly);
+        }
         row.Status = WalletTransferStatuses.Approved;
         row.ReviewedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
-        await subscriptions.ActivateProAsync(row.UserId, BillingIntervals.Monthly, row.Id.ToString());
+        if (row.Purpose != WalletPurposes.Server)
+            await subscriptions.ActivateProAsync(row.UserId, row.Interval == BillingIntervals.Yearly ? BillingIntervals.Yearly : BillingIntervals.Monthly, row.Id.ToString());
+        return row;
     }
 
     public async Task RejectAsync(Guid id, string? note)

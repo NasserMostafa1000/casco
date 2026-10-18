@@ -71,6 +71,7 @@ export default function Editor() {
   const [publishing, setPublishing] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null)
+  const [trialUntil, setTrialUntil] = useState<string | null>(null)
   const [chooseName, setChooseName] = useState<string | null>(null)
   const [nameStatus, setNameStatus] = useState<SlugStatus>({ state: 'idle' })
   const [nameError, setNameError] = useState('')
@@ -433,8 +434,9 @@ export default function Editor() {
     try {
       // The chosen name is saved before publishing so it stays reserved if hosting still has to be paid first.
       if (slug && slug !== project?.slug) await put(`/api/projects/${id}/slug`, { slug })
-      const r = await post<{ url: string }>(`/api/projects/${id}/publish`)
+      const r = await post<{ url: string; trialUntil?: string | null }>(`/api/projects/${id}/publish`)
       setChooseName(null)
+      setTrialUntil(r.trialUntil ?? null)
       setPublishedUrl(r.url)
       await load()
     } catch (e) {
@@ -1153,6 +1155,13 @@ export default function Editor() {
 
       <Modal open={!!publishedUrl} onClose={() => setPublishedUrl(null)} title={t('🎉 موقعك منشور!')}>
         <p className="text-slate-600">{t('موقعك متاح الآن على الرابط:')}</p>
+        {trialUntil && (
+          <p className="mt-2 text-sm text-slate-500">
+            {t('الرابط شغال 3 أيام، لحد {date}. بعد كده فعّل الاستضافة عشان يفضل منشور.', {
+              date: new Date(trialUntil).toLocaleDateString(),
+            })}
+          </p>
+        )}
         <a
           href={publishedUrl ?? '#'}
           target="_blank"

@@ -1,5 +1,4 @@
 User-agent: *
 Allow: /
-Disallow: /app
 
 Sitemap: https://casco.studio/sitemap.xml

@@ -14,6 +14,7 @@ public static class PlanKeys
 
 public static class BillingIntervals
 {
+    public const string Weekly = "weekly";
     public const string Monthly = "monthly";
     public const string Yearly = "yearly";
 }
@@ -124,12 +125,32 @@ public static class WalletTransferStatuses
     public const string Rejected = "rejected";
 }
 
-/// <summary>Local wallet price for one month of Pro. Dollar checkout stays on the payment gateway.</summary>
+public static class WalletPurposes
+{
+    public const string Pro = "pro";
+    /// <summary>A transfer for Casco server hosting. An admin turns the server on for a week or a month.</summary>
+    public const string Server = "server";
+}
+
+/// <summary>Local wallet price for one month of Pro. A year is twelve months. Dollar checkout stays on the payment gateway.</summary>
 public static class WalletPay
 {
     public const int AmountMinor = 68000;
     public const string Currency = "EGP";
     public const string Phone = "01026159280";
+
+    public static int ForInterval(string? interval) =>
+        interval == BillingIntervals.Yearly ? AmountMinor * 12 : AmountMinor;
+}
+
+/// <summary>Egyptian-pound price of a server paid by wallet transfer. A year is twelve months; a month stays 105.</summary>
+public static class ServerWalletPay
+{
+    public const int AmountMinor = 10500;
+    public const string Currency = "EGP";
+
+    public static int ForInterval(string? interval) =>
+        interval == BillingIntervals.Yearly ? AmountMinor * 12 : AmountMinor;
 }
 
 public class User
@@ -168,17 +189,6 @@ public class DesktopMachine
     public int ShareMask { get; set; }
     public DateTime? TrialEndsAt { get; set; }
     public Guid? LastUserId { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-}
-
-/// <summary>A desktop chat prompt kept for the admin dashboard. The text is clipped.</summary>
-public class DesktopChatMessage
-{
-    public long Id { get; set; }
-    public Guid UserId { get; set; }
-    public string MachineHash { get; set; } = "";
-    public string Model { get; set; } = "";
-    public string Text { get; set; } = "";
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
@@ -285,6 +295,12 @@ public class WalletTransfer
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid UserId { get; set; }
     public string Method { get; set; } = "";
+    /// <summary>pro activates Casco Pro. server is a hosting payment an admin turns on.</summary>
+    public string Purpose { get; set; } = WalletPurposes.Pro;
+    public Guid? ProjectId { get; set; }
+    public string? HostingTier { get; set; }
+    /// <summary>weekly or monthly, chosen by the admin when a server transfer is approved.</summary>
+    public string? Interval { get; set; }
     public int AmountMinor { get; set; } = WalletPay.AmountMinor;
     public string Currency { get; set; } = WalletPay.Currency;
     public string ProofKey { get; set; } = "";
@@ -316,6 +332,8 @@ public class Project
     public DateTime? PublishedAt { get; set; }
     public string? HostingTier { get; set; }
     public DateTime? HostingPaidUntil { get; set; }
+    /// <summary>The first publish is free for three days. A paid plan clears this.</summary>
+    public bool HostingTrial { get; set; }
     /// <summary>Admin decision, independent of hosting payment: a suspended site is offline even when hosting is paid.</summary>
     public bool IsAdminSuspended { get; set; }
     public string? AdminSuspensionReason { get; set; }

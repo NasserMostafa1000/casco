@@ -36,8 +36,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<RevokedToken> RevokedTokens => Set<RevokedToken>();
     public DbSet<DesktopLogin> DesktopLogins => Set<DesktopLogin>();
     public DbSet<DesktopMachine> DesktopMachines => Set<DesktopMachine>();
-    public DbSet<DesktopChatMessage> DesktopChatMessages => Set<DesktopChatMessage>();
-
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         // SQLite stores DateTime without a kind; every timestamp here is UTC (Npgsql already returns UTC).
@@ -107,15 +105,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.MachineHash).HasMaxLength(64);
         });
 
-        b.Entity<DesktopChatMessage>(e =>
-        {
-            e.HasIndex(x => x.CreatedAt);
-            e.HasIndex(x => x.UserId);
-            e.Property(x => x.MachineHash).HasMaxLength(64);
-            e.Property(x => x.Model).HasMaxLength(80);
-            e.Property(x => x.Text).HasMaxLength(2000);
-        });
-
         b.Entity<DesktopLogin>(e =>
         {
             e.HasIndex(x => x.UserCode).IsUnique();
@@ -131,6 +120,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasIndex(x => x.UserId);
             e.HasIndex(x => x.Status);
             e.Property(x => x.Method).HasMaxLength(20);
+            e.Property(x => x.Purpose).HasMaxLength(20).HasDefaultValue(WalletPurposes.Pro);
+            e.Property(x => x.HostingTier).HasMaxLength(20);
+            e.Property(x => x.Interval).HasMaxLength(20);
             e.Property(x => x.Currency).HasMaxLength(3);
             e.Property(x => x.ProofKey).HasMaxLength(80);
             e.Property(x => x.ContentType).HasMaxLength(40);
@@ -145,7 +137,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasIndex(x => x.Slug).IsUnique();
             e.HasIndex(x => x.CustomDomain).IsUnique();
             e.Property(x => x.Name).HasMaxLength(120);
-            e.Property(x => x.Description).HasMaxLength(2000);
+            e.Property(x => x.Description).HasMaxLength(20_000);
             e.Property(x => x.Slug).HasMaxLength(63);
             e.Property(x => x.SiteKey).HasMaxLength(32);
             e.Property(x => x.CustomDomain).HasMaxLength(253);

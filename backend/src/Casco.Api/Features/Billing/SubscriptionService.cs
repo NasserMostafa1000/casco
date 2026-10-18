@@ -1,4 +1,5 @@
 using Casco.Api.Domain;
+using Casco.Api.Features.Auth;
 using Casco.Api.Features.Sites;
 using Casco.Api.Infrastructure;
 using Microsoft.EntityFrameworkCore;
@@ -97,7 +98,20 @@ public class SubscriptionService(AppDbContext db, CreditService credits, IOption
     public async Task<PlanInfo> GetPlanAsync(Guid userId)
     {
         var sub = await RefreshAsync(userId);
-        return ToPlanInfo(sub);
+        var plan = ToPlanInfo(sub);
+        var email = await db.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => u.Email).FirstOrDefaultAsync();
+        if (!UnlimitedAccount.Matches(email)) return plan;
+        return plan with
+        {
+            Key = PlanKeys.Pro,
+            IsPro = true,
+            MaxProjects = 1_000_000,
+            DefaultTier = "standard",
+            CanUsePremium = true,
+            CanCustomDomain = true,
+            CanMultiPage = true,
+            ShowBadge = false,
+        };
     }
 
     public PlanInfo ToPlanInfo(Subscription sub)

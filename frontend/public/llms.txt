@@ -1,12 +1,12 @@
-# Casco
+# Casco Studio
 
-Casco builds websites with AI. https://casco.studio/
+Casco Studio is an AI code studio and code editor. An agent writes and edits code with you inside the editor, and you can build complete websites with hosting in Arabic, English, or Hindi.
+https://casco.studio/
 
-## Website build payment
+## Subscription
 
-Customers pay 18 USD or 180 USD once for their website code and the work of building their website.
-That amount is not paid again to keep the site online. The site stays up and working, but they cannot update the code with AI.
-Details: https://casco.studio/pricing
+Casco Pro is a monthly or yearly subscription for the code studio and editor. It is not only for websites. Hosting is a separate charge for each site.
+https://casco.studio/pricing
 
 ## Download Casco Studio
 

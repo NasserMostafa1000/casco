@@ -4,6 +4,7 @@ import { errorMessage, get, post, type HostingStatus, type HostingTier } from '.
 import { formatDate, t } from '../lib/i18n'
 import { usd, usePlans, yearlySavingLabel } from '../lib/plans'
 import { rememberCheckout, tiktokClick } from '../lib/tiktok'
+import { ServerWalletPay } from './ServerWalletPay'
 import { Alert, Badge, Button, Modal, Segmented, Spinner } from './ui'
 
 const tierInfo = (): Record<HostingTier, { title: string; points: string[] }> => ({
@@ -99,7 +100,7 @@ export function HostingModal({ projectId, open, onClose, reason }: { projectId: 
                       </p>
                     </div>
                     <Button loading={busy === tier} disabled={blocked || busy !== null} onClick={() => checkout(tier)}>
-                      {status.tier === tier && status.active ? t('تجديد') : t('اشترك')}
+                      {t('ادفع بزينة')}
                     </Button>
                   </div>
                   <ul className="mt-3 space-y-1 text-sm text-slate-600">
@@ -115,6 +116,7 @@ export function HostingModal({ projectId, open, onClose, reason }: { projectId: 
               )
             })}
           </div>
+          <ServerWalletPay projectId={projectId} period={period} />
           <p className="text-xs text-slate-500">
             {t('الاستضافة لكل موقع على حدة. إذا لم تُجدَّد يتوقف الموقع بعد {days} أيام سماح. التعديل على الموقع بالذكاء الاصطناعي يحتاج اشتراك Casco Pro (من {price} شهرياً).', {
               days: status.prices.graceDays,

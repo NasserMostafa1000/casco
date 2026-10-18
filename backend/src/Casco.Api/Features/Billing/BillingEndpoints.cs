@@ -97,9 +97,13 @@ public static class BillingEndpoints
                 wallet = new
                 {
                     amount = WalletPay.AmountMinor / 100m,
+                    yearlyAmount = WalletPay.ForInterval(BillingIntervals.Yearly) / 100m,
                     currency = WalletPay.Currency,
                     phone = WalletPay.Phone,
-                    methods = new[] { WalletMethods.VodafoneCash, WalletMethods.InstaPay }
+                    methods = new[] { WalletMethods.VodafoneCash, WalletMethods.InstaPay },
+                    serverAmount = ServerWalletPay.AmountMinor / 100m,
+                    serverYearlyAmount = ServerWalletPay.ForInterval(BillingIntervals.Yearly) / 100m,
+                    serverCurrency = ServerWalletPay.Currency
                 }
             });
         });
@@ -211,7 +215,7 @@ public static class BillingEndpoints
             var userId = http.User.UserId();
             var items = await db.WalletTransfers.Where(t => t.UserId == userId)
                 .OrderByDescending(t => t.CreatedAt).Take(10)
-                .Select(t => new { t.Id, t.Method, amount = t.AmountMinor / 100m, t.Currency, t.Status, t.ReviewNote, t.CreatedAt, t.ReviewedAt })
+                .Select(t => new { t.Id, t.Method, t.Purpose, t.ProjectId, t.HostingTier, t.Interval, amount = t.AmountMinor / 100m, t.Currency, t.Status, t.ReviewNote, t.CreatedAt, t.ReviewedAt })
                 .ToListAsync();
             return Results.Ok(new { items });
         });
@@ -221,8 +225,14 @@ public static class BillingEndpoints
             var form = await http.Request.ReadFormAsync(ct);
             var file = form.Files.GetFile("file") ?? throw ApiException.BadRequest("ارفع صورة التحويل");
             await using var stream = file.OpenReadStream();
-            var row = await wallet.SubmitAsync(http.User.UserId(), form["method"].ToString(), stream, ct);
-            return Results.Ok(new { row.Id, row.Status });
+            var userId = http.User.UserId();
+            var method = form["method"].ToString();
+            if (string.IsNullOrWhiteSpace(method)) method = WalletMethods.VodafoneCash;
+            var period = form["interval"].ToString();
+            var row = form["purpose"].ToString() == WalletPurposes.Server
+                ? await wallet.SubmitServerAsync(userId, Guid.TryParse(form["projectId"], out var projectId) ? projectId : throw ApiException.BadRequest("اختَر الموقع"), method, stream, ct, period)
+                : await wallet.SubmitAsync(userId, method, stream, ct, period);
+            return Results.Ok(new { row.Id, row.Status, row.Purpose });
         }).DisableAntiforgery().RequireRateLimiting("uploads");
 
         app.MapPost("/api/billing/ziina/webhook", async (HttpContext http, AppDbContext db, ZiinaClient ziina,

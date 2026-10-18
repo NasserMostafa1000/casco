@@ -1,0 +1,11 @@
+/download
+  X-Robots-Tag: noindex, nofollow
+
+/download/
+  X-Robots-Tag: noindex, nofollow
+
+/app
+  X-Robots-Tag: noindex, nofollow
+
+/app/*
+  X-Robots-Tag: noindex, nofollow

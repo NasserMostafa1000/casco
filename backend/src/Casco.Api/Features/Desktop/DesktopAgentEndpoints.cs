@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Casco.Api.Domain;
 using Casco.Api.Features.Ai;
+using Casco.Api.Features.Auth;
 using Casco.Api.Features.Billing;
 using Casco.Api.Infrastructure;
 using Microsoft.Extensions.Options;
@@ -44,7 +45,8 @@ public static class DesktopAgentEndpoints
         var userId = http.User.UserId();
         var plan = await subs.GetPlanAsync(userId);
         var access = await DesktopTrial.ReadAsync(db, userId, plan.IsPro, http.Request.Headers[DesktopTrial.MachineHeader], ct);
-        return Results.Ok(AccessBody(access));
+        var locked = access.ModelLocked || await UnlimitedAccount.IsUserAsync(db, userId, ct);
+        return Results.Ok(AccessBody(access, locked));
     }
 
     private static async Task<IResult> ShareAsync(JsonElement body, SubscriptionService subs, AppDbContext db, HttpContext http, CancellationToken ct)
@@ -53,12 +55,13 @@ public static class DesktopAgentEndpoints
         var userId = http.User.UserId();
         var plan = await subs.GetPlanAsync(userId);
         var access = await DesktopTrial.ShareAsync(db, userId, plan.IsPro, http.Request.Headers[DesktopTrial.MachineHeader], slot, ct);
-        return Results.Ok(AccessBody(access));
+        var locked = access.ModelLocked || await UnlimitedAccount.IsUserAsync(db, userId, ct);
+        return Results.Ok(AccessBody(access, locked));
     }
 
-    private static object AccessBody(DesktopTrial.Access access) => new
+    private static object AccessBody(DesktopTrial.Access access, bool modelLocked) => new
     {
-        modelLocked = access.ModelLocked,
+        modelLocked,
         shareRequired = access.ShareRequired,
         shares = access.Shares,
         slots = Enumerable.Range(1, DesktopTrial.Groups).Where(slot => (access.Mask & (1 << (slot - 1))) != 0).ToArray(),
@@ -71,6 +74,7 @@ public static class DesktopAgentEndpoints
         var userId = http.User.UserId();
         var plan = await subs.GetPlanAsync(userId);
         var access = await DesktopTrial.ReadAsync(db, userId, plan.IsPro, http.Request.Headers[DesktopTrial.MachineHeader], ct);
+        var locked = access.ModelLocked || await UnlimitedAccount.IsUserAsync(db, userId, ct);
         var tiers = await catalog.GetEffectiveTiersAsync();
         var premiumOnly = new HashSet<string>(tiers.GetValueOrDefault(AiTiers.Premium) ?? [], StringComparer.Ordinal);
         foreach (var tier in new[] { AiTiers.Cheap, AiTiers.Standard })
@@ -86,13 +90,13 @@ public static class DesktopAgentEndpoints
                 id = m.Id,
                 label = EnglishLabel(m),
                 premium = premiumOnly.Contains(m.Id),
-                allowed = plan.CanUsePremium || !premiumOnly.Contains(m.Id),
+                allowed = !locked && (plan.CanUsePremium || !premiumOnly.Contains(m.Id)),
                 cost = m.InputPer1M + m.OutputPer1M
             })
             .ToList();
         var autoCost = models.Where(m => m.allowed).Select(m => m.cost).DefaultIfEmpty(0).Min();
         models.Insert(0, new { id = "auto", label = "Auto", premium = false, allowed = true, cost = autoCost });
-        return Results.Ok(new { plan = plan.Key, models, modelLocked = access.ModelLocked, shareRequired = access.ShareRequired, shares = access.Shares, slots = Enumerable.Range(1, DesktopTrial.Groups).Where(slot => (access.Mask & (1 << (slot - 1))) != 0).ToArray(), downloadUrl = DesktopTrial.DownloadUrl });
+        return Results.Ok(new { plan = plan.Key, models, modelLocked = locked, shareRequired = access.ShareRequired, shares = access.Shares, slots = Enumerable.Range(1, DesktopTrial.Groups).Where(slot => (access.Mask & (1 << (slot - 1))) != 0).ToArray(), downloadUrl = DesktopTrial.DownloadUrl });
     }
 
     private static string EnglishLabel(AiModelOptions model)
@@ -113,9 +117,10 @@ public static class DesktopAgentEndpoints
         var plan = await subs.GetPlanAsync(userId);
         var machine = http.Request.Headers[DesktopTrial.MachineHeader].ToString();
         var access = await DesktopTrial.ReadAsync(db, userId, plan.IsPro, machine, ct);
+        var unlimited = await credits.IsUnlimitedAsync(userId);
         if (access.ShareRequired)
-            throw new ApiException(402, "شارك رابط تنزيل Casco في 5 جروبات عشان تتفعل 5 ساعات مجانية.", "share_required");
-        if (access.ModelLocked) modelId = "auto";
+            throw new ApiException(402, "شارك رابط تنزيل Casco في 5 جروبات عشان تتفعل 5 دقايق مجانية.", "share_required");
+        if (access.ModelLocked || unlimited) modelId = "auto";
         var tiers = await catalog.GetEffectiveTiersAsync();
         var premiumOnly = new HashSet<string>(tiers.GetValueOrDefault(AiTiers.Premium) ?? [], StringComparer.Ordinal);
         foreach (var tier in new[] { AiTiers.Cheap, AiTiers.Standard })
@@ -131,7 +136,7 @@ public static class DesktopAgentEndpoints
         if (!plan.CanUsePremium && premiumOnly.Contains(model.Id))
             throw ApiException.Payment("This model is for Pro accounts. Choose another model or upgrade at casco.studio.", "premium_model");
 
-        var covered = access.FreePrompt || access.Trial;
+        var covered = access.FreePrompt || access.Trial || unlimited;
         var balance = await credits.GetBalanceAsync(userId);
         if (!covered && balance.Available < 1)
             throw new ApiException(402, "Your Casco credits are used up. Add credits at https://casco.studio/app/billing.", "insufficient_credits");
@@ -167,7 +172,6 @@ public static class DesktopAgentEndpoints
         var charged = covered ? 0 : Math.Max(1, credits.CreditsForCost(cost));
         var after = covered ? balance : await credits.ChargeAsync(userId, charged, "desktop");
         if (access.FreePrompt) await DesktopTrial.MarkFreePromptUsedAsync(db, machine, ct);
-        await DesktopTrial.LogAsync(db, userId, machine, model.Id, DesktopTrial.PromptText(body), ct);
         await RecordAsync(db, userId, plan.Key, model, usage.Input, usage.Cached, usage.Output, cost, true, null, (int)started.ElapsedMilliseconds, "desktop");
 
         return Results.Ok(new
@@ -176,7 +180,7 @@ public static class DesktopAgentEndpoints
             credits = new { charged, available = after.Available },
             shareRequired = access.FreePrompt,
             shares = access.Shares,
-            modelLocked = access.ModelLocked || access.FreePrompt,
+            modelLocked = access.ModelLocked || access.FreePrompt || unlimited,
             downloadUrl = DesktopTrial.DownloadUrl
         });
     }
@@ -199,8 +203,8 @@ public static class DesktopAgentEndpoints
         var machine = http.Request.Headers[DesktopTrial.MachineHeader].ToString();
         var access = await DesktopTrial.ReadAsync(db, userId, plan.IsPro, machine, ct);
         if (access.ShareRequired)
-            throw new ApiException(402, "شارك رابط تنزيل Casco في 5 جروبات عشان تتفعل 5 ساعات مجانية.", "share_required");
-        var covered = access.Trial;
+            throw new ApiException(402, "شارك رابط تنزيل Casco في 5 جروبات عشان تتفعل 5 دقايق مجانية.", "share_required");
+        var covered = access.Trial || await credits.IsUnlimitedAsync(userId);
         var charge = covered ? 0 : Math.Max(1, credits.CreditsForCost(ImageUsd));
         var balance = await credits.GetBalanceAsync(userId);
         if (!covered && balance.Available < charge)

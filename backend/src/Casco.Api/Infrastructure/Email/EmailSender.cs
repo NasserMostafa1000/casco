@@ -1,5 +1,6 @@
-using System.Net;
 using System.Net.Mail;
+using MailKit.Security;
+using MimeKit;
 using Casco.Api.Infrastructure;
 using System.Net.Mime;
 using System.Text;
@@ -11,7 +12,7 @@ namespace Casco.Api.Infrastructure.Email;
 public class SmtpOptions
 {
     public string Host { get; set; } = "";
-    /// <summary>587 with STARTTLS (System.Net.Mail does not support implicit TLS on 465).</summary>
+    /// <summary>587 with STARTTLS. This is the sender used for customer mail and dashboard mail.</summary>
     public int Port { get; set; } = 587;
     public string User { get; set; } = "";
     public string Password { get; set; } = "";
@@ -72,8 +73,92 @@ public static class EmailAssets
     public static string LogoDataUri => "data:image/png;base64," + Convert.ToBase64String(Logo);
 }
 
-public class EmailSenderService(EmailQueue queue, IOptions<SmtpOptions> options, IOptions<AppOptions> app,
-    LeaderElection leader, ILogger<EmailSenderService> logger) : BackgroundService
+/// <summary>Shown to the dashboard. <see cref="Permanent"/> failures are not retried.</summary>
+public sealed class MailDeliveryException(string message, bool permanent, Exception? inner = null) : Exception(message, inner)
+{
+    public bool Permanent { get; } = permanent;
+}
+
+public class SmtpMailer(IOptions<SmtpOptions> options, IOptions<AppOptions> app)
+{
+    public async Task SendAsync(EmailMessage message, CancellationToken ct = default)
+    {
+        var o = options.Value;
+        if (o.UsesPickup)
+        {
+            await SendPickupAsync(message, o, ct);
+            return;
+        }
+
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        budget.CancelAfter(TimeSpan.FromSeconds(20));
+        using var client = new MailKit.Net.Smtp.SmtpClient();
+        try
+        {
+            var secure = o.Port == 465
+                ? SecureSocketOptions.SslOnConnect
+                : o.EnableSsl ? SecureSocketOptions.StartTls : SecureSocketOptions.None;
+            await client.ConnectAsync(o.Host, o.Port, secure, budget.Token);
+            if (!string.IsNullOrEmpty(o.User))
+                await client.AuthenticateAsync(o.User, o.Password, budget.Token);
+            using var mime = BuildMime(message, o.From);
+            await client.SendAsync(mime, budget.Token);
+            await client.DisconnectAsync(true, budget.Token);
+        }
+        catch (MailDeliveryException)
+        {
+            throw;
+        }
+        catch (AuthenticationException ex)
+        {
+            throw new MailDeliveryException("سيرفر البريد رفض تسجيل الدخول لصندوق الإرسال", permanent: true, ex);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new MailDeliveryException("سيرفر البريد ما ردش في الوقت", permanent: false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            var permanent = ex.Message.Contains("authenticat", StringComparison.OrdinalIgnoreCase);
+            throw new MailDeliveryException("سيرفر البريد رفض الرسالة", permanent, ex);
+        }
+    }
+
+    private async Task SendPickupAsync(EmailMessage message, SmtpOptions o, CancellationToken ct)
+    {
+        var dir = Path.IsPathRooted(o.PickupDirectory) ? o.PickupDirectory : Path.Combine(app.Value.DataPath, o.PickupDirectory);
+        dir = Path.GetFullPath(dir);
+        Directory.CreateDirectory(dir);
+        using var client = new System.Net.Mail.SmtpClient
+        {
+            DeliveryMethod = SmtpDeliveryMethod.SpecifiedPickupDirectory,
+            PickupDirectoryLocation = dir
+        };
+        using var mail = EmailSenderService.Build(message, o.From);
+        await client.SendMailAsync(mail, ct);
+    }
+
+    static MimeMessage BuildMime(EmailMessage message, string from)
+    {
+        var mime = new MimeMessage();
+        mime.From.Add(MailboxAddress.Parse(from));
+        mime.To.Add(MailboxAddress.Parse(message.To));
+        mime.Subject = message.Subject;
+        if (message.Kind != "direct")
+            mime.Headers.Add("Auto-Submitted", "auto-generated");
+
+        var body = new BodyBuilder { TextBody = message.Text, HtmlBody = message.Html };
+        if (message.Html.Contains("cid:" + EmailAssets.LogoContentId, StringComparison.Ordinal))
+        {
+            var logo = body.LinkedResources.Add("casco.png", EmailAssets.Logo, MimeKit.ContentType.Parse("image/png"));
+            logo.ContentId = EmailAssets.LogoContentId;
+        }
+        mime.Body = body.ToMessageBody();
+        return mime;
+    }
+}
+
+public class EmailSenderService(EmailQueue queue, SmtpMailer mailer, LeaderElection leader, ILogger<EmailSenderService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -86,11 +171,11 @@ public class EmailSenderService(EmailQueue queue, IOptions<SmtpOptions> options,
             {
                 try
                 {
-                    await SendAsync(message, stoppingToken);
+                    await mailer.SendAsync(message, stoppingToken);
                     queue.MarkSent();
                     break;
                 }
-                catch (Exception ex) when (!stoppingToken.IsCancellationRequested && attempt < 3)
+                catch (Exception ex) when (!stoppingToken.IsCancellationRequested && attempt < 3 && ex is not MailDeliveryException { Permanent: true })
                 {
                     logger.LogWarning("Sending {Kind} email failed (attempt {Attempt}): {Error}", message.Kind, attempt, ex.Message);
                     await Task.Delay(TimeSpan.FromSeconds(10 * attempt), stoppingToken);
@@ -105,29 +190,6 @@ public class EmailSenderService(EmailQueue queue, IOptions<SmtpOptions> options,
         }
     }
 
-    private async Task SendAsync(EmailMessage message, CancellationToken ct)
-    {
-        var o = options.Value;
-        using var client = new SmtpClient();
-        if (o.UsesPickup)
-        {
-            var dir = Path.IsPathRooted(o.PickupDirectory) ? o.PickupDirectory : Path.Combine(app.Value.DataPath, o.PickupDirectory);
-            dir = Path.GetFullPath(dir);
-            Directory.CreateDirectory(dir);
-            client.DeliveryMethod = SmtpDeliveryMethod.SpecifiedPickupDirectory;
-            client.PickupDirectoryLocation = dir;
-        }
-        else
-        {
-            client.Host = o.Host;
-            client.Port = o.Port;
-            client.EnableSsl = o.EnableSsl;
-            if (!string.IsNullOrEmpty(o.User)) client.Credentials = new NetworkCredential(o.User, o.Password);
-        }
-        using var mail = Build(message, o.From);
-        await client.SendMailAsync(mail, ct);
-    }
-
     public static MailMessage Build(EmailMessage message, string from)
     {
         var mail = new MailMessage
@@ -139,7 +201,8 @@ public class EmailSenderService(EmailQueue queue, IOptions<SmtpOptions> options,
             BodyEncoding = Encoding.UTF8
         };
         mail.To.Add(message.To);
-        mail.Headers.Add("Auto-Submitted", "auto-generated");
+        if (message.Kind != "direct")
+            mail.Headers.Add("Auto-Submitted", "auto-generated");
 
         var text = AlternateView.CreateAlternateViewFromString(message.Text, Encoding.UTF8, MediaTypeNames.Text.Plain);
         var html = AlternateView.CreateAlternateViewFromString(message.Html, Encoding.UTF8, MediaTypeNames.Text.Html);

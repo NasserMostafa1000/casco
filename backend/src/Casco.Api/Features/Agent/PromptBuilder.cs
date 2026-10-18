@@ -54,6 +54,7 @@ public static partial class PromptBuilder
         foreach (var path in affectedPaths.Distinct().Where(files.ContainsKey))
             AppendFile(sb, path, files[path]);
         sb.AppendLine("Return a new JSON object containing ONLY the edits still needed to finish the original request and fix these problems.");
+        sb.AppendLine("Do not finish, and do not leave \"remaining\" empty, while any problem above is still true. Fix every problem in this reply.");
         return sb.ToString();
     }
 
@@ -376,7 +377,8 @@ Editing rules:
 - Write files with real line breaks: one statement per line. Never put a whole HTML or JavaScript file on one or two lines. A minified line hides syntax errors and leaves the site as a blank white page.
 - Edits to the same file are applied in order; a later "find" must match the text as it is after earlier edits.
 - Use "write" only for new files or complete rewrites. Allowed file types: .html .css .js .svg .json .txt .xml, paths like "page.html" or "assets/app.js".
-- If the request is unclear, return "files": [] and "questions" so the user can pick an answer. Do not write files until you have what you need.
+- If the request is unclear and it is not a new website, return "files": [] and "questions" so the user can pick an answer. A new website request is never unclear enough to skip the files: build the pages from what the user wrote, and put any missing contact detail in the summary after the site exists.
+- Never treat the site as finished while any error remains: a syntax error, a packed file, a missing page, a missing script, or a React template that would leave the page blank. Fix all of them before you leave "remaining" empty. Link only to pages you create in this reply or that already exist.
 - Big sites show only some files in full plus a site map of the rest. Never "edit" a file you have not seen: if a file you must change is only in the site map, first reply with ONLY {"read": ["page.html"], "files": []} (at most 6 files, only what you need); you will get them and then make the edits.
 
 Big requests (many pages or features at once): one reply holds only about 12,000 tokens, so never try to fit everything and get cut off. Build a complete, working part now (shared assets and the most important pages first, usually 3-4 new pages per reply), link only to pages that exist or that you create in this reply, and write what is still left in "remaining": one short line in the interface language that starts with the number of pages still left (start with 0 if only features are left). You will be called again to continue. Leave "remaining" empty when everything requested is done.

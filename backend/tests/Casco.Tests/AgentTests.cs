@@ -261,6 +261,68 @@ public class AgentTests
     }
 
     [Fact]
+    public void Repair_closes_void_tags_and_converts_style_strings()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["assets/home.js"] = """
+                import htm from "https://esm.sh/htm";
+                const html = htm.bind(React.createElement);
+                export function App() {
+                  return html`<main><img src="a.jpg" alt="photo"><br><input name="q" style="display:none"></main>`;
+                }
+                """,
+            ["assets/app.js"] = "<img src=\"a.jpg\">"
+        };
+        SiteValidator.Repair(files);
+        Assert.Contains("<img src=\"a.jpg\" alt=\"photo\" />", files["assets/home.js"]);
+        Assert.Contains("<br />", files["assets/home.js"]);
+        Assert.Contains("style=${{display: \"none\"}}", files["assets/home.js"]);
+        Assert.Equal("<img src=\"a.jpg\">", files["assets/app.js"]);
+    }
+
+    [Fact]
+    public void Completion_blocks_javascript_page_links_and_missing_scripts()
+    {
+        var home = """
+            import React from "https://esm.sh/react@19";
+            import { createRoot } from "https://esm.sh/react-dom@19/client";
+            import htm from "https://esm.sh/htm";
+            const html = htm.bind(React.createElement);
+            const docs = "https://example.com/guide.html";
+            export function App() {
+              return html`<a href="contact.html">Contact</a>`;
+            }
+            createRoot(document.getElementById("root")).render(html`<${App} />`);
+            """;
+        var index = """
+            <!DOCTYPE html>
+            <html><head>
+            <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+            <style type="text/tailwindcss">@theme { --color-primary: #123456; }</style>
+            </head><body>
+            <div id="root"></div>
+            <script type="module" src="assets/home.js"></script>
+            <script src="assets/missing.js"></script>
+            </body></html>
+            """;
+        var files = new Dictionary<string, string>
+        {
+            ["index.html"] = index,
+            ["assets/home.js"] = home
+        };
+        var errors = SiteValidator.CompletionErrors(files, true);
+        Assert.Contains(errors, e => e.Error.Contains("contact.html"));
+        Assert.Contains(errors, e => e.Error.Contains("assets/missing.js"));
+        Assert.DoesNotContain(errors, e => e.Error.Contains("guide.html"));
+
+        files["contact.html"] = index.Replace("<script src=\"assets/missing.js\"></script>", "");
+        files["assets/missing.js"] = "console.log(1);\n";
+        errors = SiteValidator.CompletionErrors(files, true);
+        Assert.DoesNotContain(errors, e => e.Error.Contains("contact.html") || e.Error.Contains("missing.js"));
+    }
+
+    [Fact]
     public void Injects_sdk_before_head_and_badge_before_body()
     {
         var html = HtmlInjector.Inject("<html><head><title>t</title></head><body>hi</body></html>", "https://casco.studio/", "key1", preview: false, badge: true);

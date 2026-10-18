@@ -1,8 +1,7 @@
-import { useEffect } from 'react'
 import { Link, NavLink, Navigate, Outlet, useNavigate } from 'react-router-dom'
-import { CreditCard, Download, LayoutGrid, LogOut, Plus, Settings, Shield, Sparkles, Zap } from 'lucide-react'
+import { CircleDollarSign, CreditCard, Download, LayoutGrid, LogOut, Plus, Settings, Shield, Sparkles, Zap } from 'lucide-react'
 import { useAuth } from '../lib/auth'
-import { num, setLang, t } from '../lib/i18n'
+import { num, t } from '../lib/i18n'
 import { LanguageSwitcher, Popover } from './LanguageSwitcher'
 import { ThemeToggle } from './ThemeToggle'
 import { Badge, Spinner } from './ui'
@@ -24,9 +23,6 @@ export function Logo({ className = '', full = false }: { className?: string; ful
 
 export function RequireAuth() {
   const { me, loading } = useAuth()
-  useEffect(() => {
-    setLang('en')
-  }, [])
   if (loading)
     return (
       <div className="grid min-h-screen place-items-center text-brand-600">
@@ -64,6 +60,7 @@ export function AppShell() {
     { to: '/app/billing', end: false, icon: CreditCard, label: t('الاشتراك والنقاط') },
     { to: '/app/settings', end: false, icon: Settings, label: t('الإعدادات') },
     { to: '/download', end: false, icon: Download, label: t('تنزيل') },
+    ...(me.partner ? [{ to: '/app/earnings', end: false, icon: CircleDollarSign, label: t('أرباحي') }] : []),
     ...(isAdmin ? [{ to: '/app/admin', end: false, icon: Shield, label: t('لوحة الإدارة') }] : []),
   ]
   const signOut = () => {

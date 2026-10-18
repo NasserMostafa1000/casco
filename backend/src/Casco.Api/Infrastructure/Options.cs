@@ -20,6 +20,11 @@ public class AppOptions
     public string CnameTarget { get; set; } = "sites.casco.studio";
     public string DataPath { get; set; } = "data";
     public string[] AdminEmails { get; set; } = [];
+    /// <summary>Accounts that may see this month's new users and a 10% share of what those users paid. They do not get the admin panel.</summary>
+    public string[] PartnerEmails { get; set; } = [];
+
+    public bool IsPartner(string? email) =>
+        !string.IsNullOrWhiteSpace(email) && PartnerEmails.Contains(email, StringComparer.OrdinalIgnoreCase);
     public string[] CorsOrigins { get; set; } = ["http://localhost:5173"];
 
     public string FrontendBase => (string.IsNullOrWhiteSpace(FrontendUrl) ? PublicUrl : FrontendUrl).TrimEnd('/');

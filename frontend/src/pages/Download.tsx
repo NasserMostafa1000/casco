@@ -20,7 +20,7 @@ type AssetName = (typeof FILES)[keyof typeof FILES]
 type Asset = { name: string; size: number; url: string }
 
 function releaseUrl(name: string) {
-  return `https://github.com/${REPO}/releases/latest/download/${name}`
+  return `https://cdn.casco.studio/downloads/${name}`
 }
 
 function formatSize(bytes: number) {
@@ -34,12 +34,19 @@ export default function Download() {
   const [assets, setAssets] = useState<Asset[]>([])
   const [ready, setReady] = useState(false)
   const [notice, setNotice] = useState('')
+  const [updatedAt, setUpdatedAt] = useState('')
   const forced = new URLSearchParams(location.search).get('update') === '1'
 
   useEffect(() => {
+    const robots = document.querySelector('meta[name="robots"]')
+    const previous = robots?.getAttribute('content') ?? 'index, follow'
+    robots?.setAttribute('content', 'noindex, nofollow')
     document.title = `${t('تنزيل')} Casco Studio | استوديو ومحرر أكواد`
-    document.querySelector('meta[name="description"]')?.setAttribute('content', 'Download Casco Studio, an AI code studio and code editor for Windows and Mac, like Cursor and Claude.')
+    document.querySelector('meta[name="description"]')?.setAttribute('content', 'Download Casco Studio, an AI code studio and code editor for Windows and Mac. An agent writes and edits code with you.')
     document.querySelector('link[rel="canonical"]')?.setAttribute('href', 'https://casco.studio/download')
+    return () => {
+      robots?.setAttribute('content', previous)
+    }
   }, [])
 
   useEffect(() => {
@@ -59,15 +66,36 @@ export default function Download() {
 
   useEffect(() => {
     const ctrl = new AbortController()
-    fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { signal: ctrl.signal })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data: { tag_name?: string; assets?: { name: string; size: number; browser_download_url: string }[] } | null) => {
-        if (!data) return
-        setVersion(data.tag_name || '')
-        setAssets((data.assets || []).map((a) => ({ name: a.name, size: a.size, url: a.browser_download_url })))
-      })
-      .catch(() => {})
-      .finally(() => setReady(true))
+    const windowsUrl = releaseUrl(FILES.windows)
+    Promise.all([
+      get<{ version?: string; message?: string }>('/api/desktop/update').catch(() => null),
+      fetch(windowsUrl, { method: 'HEAD', signal: ctrl.signal }).catch(() => null),
+      fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { signal: ctrl.signal })
+        .then((res) => (res.ok ? res.json() : null))
+        .catch(() => null),
+    ]).then(([policy, head, release]) => {
+      if (ctrl.signal.aborted) return
+      const data = release as { tag_name?: string; assets?: { name: string; size: number }[] } | null
+      if (data?.assets?.length) {
+        setAssets(data.assets.map((a) => ({ name: a.name, size: a.size, url: releaseUrl(a.name) })))
+      }
+      setVersion(policy?.version || data?.tag_name || '')
+      if (policy?.message) setNotice(policy.message)
+      const modified = head?.headers?.get('last-modified')
+      if (modified) {
+        const when = new Date(modified)
+        if (!Number.isNaN(when.getTime())) setUpdatedAt(when.toLocaleString())
+      }
+      const length = Number(head?.headers?.get('content-length') || 0)
+      if (length > 0) {
+        setAssets((current) => {
+          if (current.some((a) => a.name === FILES.windows)) return current
+          return [...current, { name: FILES.windows, size: length, url: windowsUrl }]
+        })
+      }
+    }).finally(() => {
+      if (!ctrl.signal.aborted) setReady(true)
+    })
     return () => ctrl.abort()
   }, [])
 
@@ -100,7 +128,12 @@ export default function Download() {
         <p className="mt-4 max-w-2xl text-lg text-slate-600">
           {t('برنامج الكمبيوتر فيه Casco Agent. سجّل الدخول بنفس حسابك على casco.studio.')}
         </p>
-        {version && <p className="mt-3 text-sm text-slate-500">{t('آخر نسخة')}: {version}</p>}
+        {(version || updatedAt) && (
+          <p className="mt-3 text-sm text-slate-500">
+            {version ? `${t('آخر نسخة')}: ${version}` : t('آخر نسخة')}
+            {updatedAt ? ` · ${updatedAt}` : ''}
+          </p>
+        )}
 
         <div className="mt-10 grid gap-4 md:grid-cols-2">
           <Card
@@ -112,13 +145,13 @@ export default function Download() {
           <Card
             icon={<Apple className="h-6 w-6" />}
             title="macOS"
-            text={t('ماك Apple Silicon أو Intel. النسخة غير موقعة من أبل، ولو النظام منع الفتح اضغط يمين ثم Open.')}
+            text={t('لو النظام منع الفتح اضغط يمين ثم Open.')}
             primary={{ label: t('تنزيل ماك Apple Silicon'), href: find(FILES.macArm)?.url || releaseUrl(FILES.macArm), size: find(FILES.macArm)?.size }}
             secondary={{ label: t('تنزيل ماك Intel'), href: find(FILES.macIntel)?.url || releaseUrl(FILES.macIntel), size: find(FILES.macIntel)?.size }}
           />
         </div>
 
-        {ready && assets.length === 0 && (
+        {ready && !find(FILES.windows) && (
           <p className="mt-8 text-sm text-slate-500">{t('أول نسخة بتتبني على GitHub. زرار التنزيل هيشتغل لما البناء يخلص.')}</p>
         )}
       </main>
@@ -157,6 +190,7 @@ function DownloadLink({ label, href, size, strong }: { label: string; href?: str
   return (
     <a
       href={href}
+      download
       className={
         strong
           ? 'mt-6 inline-flex h-12 items-center gap-2 rounded-2xl bg-ink px-5 font-semibold text-white transition hover:bg-slate-800'

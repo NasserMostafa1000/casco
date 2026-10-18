@@ -46,8 +46,9 @@ export default function Landing() {
   const yearlySaving = plans ? yearlySavingLabel(plans.pro.monthlyPrice, plans.pro.yearlyPrice) : null
 
   useEffect(() => {
+    document.querySelector('meta[name="robots"]')?.setAttribute('content', 'index, follow')
     document.title = 'Casco Studio | استوديو ومحرر أكواد'
-    document.querySelector('meta[name="description"]')?.setAttribute('content', 'Casco Studio استوديو ومحرر أكواد بالذكاء الاصطناعي مثل Cursor و Claude. اكتب الكود وعدّله مع الوكيل، وابنِ مواقع كاملة.')
+    document.querySelector('meta[name="description"]')?.setAttribute('content', 'Casco Studio استوديو ومحرر أكواد بالذكاء الاصطناعي. وكيل يكتب الكود ويعدّله معك، وتبني مواقع كاملة.')
     document.querySelector('link[rel="canonical"]')?.setAttribute('href', 'https://casco.studio/')
   }, [])
 
@@ -119,7 +120,7 @@ export default function Landing() {
     [t('هل أحتاج خبرة في البرمجة؟'), t('لا. تكتب وصف موقعك بكلامك العادي، وتعدّل عليه بنفس الطريقة. ولو أنت مبرمج تقدر تشوف الكود وتنزّله.')],
     [t('بأي لغة يمكن أن يكون موقعي؟'), t('بأي لغة: العربية والإنجليزية والهندية والفرنسية وغيرها. اختر اللغة عند إنشاء الموقع أو اكتب وصفك بها، ويُضبط اتجاه الصفحة تلقائياً.')],
     [t('هل الموقع يعمل على الموبايل؟'), t('نعم، كل المواقع متجاوبة وتعمل على كل الشاشات، وتقدر تعاين شكلها على الموبايل والتابلت من المحرر.')],
-    [t('العميل بيدفع 18$ أو 180$ كام مرة؟'), t('مرة واحدة بس، مقابل كود موقعه ومهمة بنائه. المبلغ مش بيتدفع تاني عشان الموقع يفضل شغال. الموقع هيفضل شغال عادي، لكن مش هيقدر يحدّث الكود بالذكاء الاصطناعي.')],
+    [t('اشتراك Casco Pro كام؟'), t('18 دولار شهرياً أو 180 دولار سنوياً لاستوديو ومحرر الأكواد. الوكيل يكتب الكود ويعدّله معك، وتقدر تبني مواقع من نفس المكان. الاستضافة حساب منفصل لكل موقع.')],
     [t('كيف تعمل النقاط؟'), t('كل بناء أو تعديل بالذكاء الاصطناعي يستهلك نقاطاً حسب حجمه. الموقع الكبير ممكن يستهلك نقاط الشهر كلها قبل ما يخلص، والتعديلات الصغيرة تستهلك نقاطاً قليلة، ولا يُخصم شيء لو فشل الطلب.')],
     [t('هل أستطيع ربط دومين خاص؟'), t('نعم، بعد تفعيل الاستضافة تقدر تربط دومينك الخاص مع شهادة HTTPS مجانية.')],
   ]
@@ -207,10 +208,10 @@ export default function Landing() {
           <h1 className="mt-6 animate-fade-up text-4xl font-extrabold tracking-tight text-ink [animation-delay:80ms] sm:text-6xl lg:text-7xl">
             {t('استوديو ومحرر أكواد')}
             <br />
-            <span className="text-gradient">{t('مثل Cursor و Claude')}</span>
+            <span className="text-gradient">{t('الوكيل يكتب الكود معك')}</span>
           </h1>
           <p className="mx-auto mt-6 max-w-2xl animate-fade-up text-base text-slate-600 [animation-delay:160ms] sm:text-lg">
-            {t('Casco Studio استوديو ومحرر أكواد بالذكاء الاصطناعي. اكتب الكود وعدّله مع الوكيل مثل Cursor و Claude، وابنِ موقعك الكامل من نفس المكان.')}
+            {t('Casco Studio استوديو ومحرر أكواد بالذكاء الاصطناعي. اكتب الكود وعدّله مع الوكيل، وابنِ موقعك الكامل من نفس المكان.')}
           </p>
 
           <div className="mx-auto mt-10 max-w-2xl animate-fade-up rounded-3xl bg-gradient-to-br from-brand-500/40 via-violet-500/20 to-fuchsia-500/40 p-px shadow-2xl shadow-brand-900/10 [animation-delay:240ms]">
@@ -356,7 +357,7 @@ export default function Landing() {
       {/* Pricing */}
       <section id="pricing" className="scroll-mt-20 bg-ink py-24 text-white">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <SectionTitle dark eyebrow={t('الأسعار')} title={t('أسعار بسيطة وواضحة')} text={t('العميل يدفع 18$ أو 180$ مرة واحدة مقابل كود موقعه ومهمة بنائه.')} />
+          <SectionTitle dark eyebrow={t('الأسعار')} title={t('أسعار بسيطة وواضحة')} text={t('Casco Pro اشتراك شهري أو سنوي لاستوديو ومحرر الأكواد. مش مقابل المواقع بس، والاستضافة حساب منفصل لكل موقع.')} />
           <div className="mt-14 grid gap-4 lg:grid-cols-3">
             <PriceCard
               title={t('مجاني')}
@@ -373,16 +374,16 @@ export default function Landing() {
               featured
               title="Pro"
               price={usd(plans?.pro.monthlyPrice)}
-              period={t('مرة واحدة')}
-              note={t('أو {price} مرة واحدة', { price: usd(plans?.pro.yearlyPrice) }) + (yearlySaving ? ` (${yearlySaving})` : '')}
-              explain={t('المبلغ ده مرة واحدة بس، مقابل كود موقعك ومهمة بنائه. مش هيتدفع تاني عشان موقعك يفضل شغال. موقعك هيفضل شغال عادي، لكن مش هتقدر تحدّث الكود بالذكاء الاصطناعي.')}
+              period={t('شهري')}
+              note={t('أو {price} سنوياً', { price: usd(plans?.pro.yearlyPrice) }) + (yearlySaving ? ` (${yearlySaving})` : '')}
+              explain={t('اشتراك Casco Pro لاستوديو ومحرر الأكواد. اكتب الكود وعدّله مع الوكيل، وابنِ مواقعك من نفس المكان.')}
               points={[
                 t('التعديل على مواقعك بالكلام في أي وقت'),
                 t('مواقع متعددة الصفحات'),
                 t('منصات كورسات وإعلانات كاملة'),
                 t('{n} نقطة شهرياً + وضع الذكاء القوي', { n: num(plans?.pro.monthlyCredits ?? 5000) }),
                 t('تنزيل كود موقعك كاملاً'),
-                t('الدفع مرة واحدة لبناء الموقع'),
+                t('اكتب الكود وعدّله مع الوكيل'),
               ]}
               action={
                 <button onClick={start} className="mt-8 h-11 w-full rounded-xl bg-white font-semibold text-ink transition hover:bg-slate-100">
@@ -444,7 +445,7 @@ export default function Landing() {
               <LanguageSwitcher />
             </div>
             <Link to="/download" className="text-sm text-slate-500 underline-offset-2 hover:underline">{t('تنزيل')}</Link>
-            <a href="/pricing" className="text-sm text-slate-500 underline-offset-2 hover:underline">{t('دفع بناء الموقع مرة واحدة')}</a>
+            <a href="/pricing" className="text-sm text-slate-500 underline-offset-2 hover:underline">{t('اشتراك Casco Pro')}</a>
             <a href="/owner" className="text-sm text-slate-500 underline-offset-2 hover:underline">{t('مالك Casco: ناصر مصطفي البربري')}</a>
             <span className="text-sm text-slate-500">© {new Date().getFullYear()} Casco Studio</span>
           </div>

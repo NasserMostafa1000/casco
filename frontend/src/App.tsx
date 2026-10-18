@@ -13,6 +13,7 @@ import { DesktopConnect } from './pages/DesktopConnect'
 import NewProject from './pages/NewProject'
 
 const Admin = lazy(() => import('./pages/Admin'))
+const PartnerEarnings = lazy(() => import('./pages/PartnerEarnings'))
 const Billing = lazy(() => import('./pages/Billing'))
 const BillingResult = lazy(() => import('./pages/BillingResult'))
 const Editor = lazy(() => import('./pages/Editor'))
@@ -31,6 +32,24 @@ function Page({ children }: { children: ReactNode }) {
       {children}
     </Suspense>
   )
+}
+
+function PrivateRobots() {
+  const { pathname } = useLocation()
+  useEffect(() => {
+    if (!pathname.startsWith('/app')) return
+    const robots = document.querySelector('meta[name="robots"]')
+    const canonical = document.querySelector('link[rel="canonical"]')
+    const previousRobots = robots?.getAttribute('content') ?? 'index, follow'
+    const previousCanonical = canonical?.getAttribute('href') ?? 'https://casco.studio/'
+    robots?.setAttribute('content', 'noindex, nofollow')
+    canonical?.setAttribute('href', `https://casco.studio${pathname}`)
+    return () => {
+      robots?.setAttribute('content', previousRobots)
+      canonical?.setAttribute('href', previousCanonical)
+    }
+  }, [pathname])
+  return null
 }
 
 function TikTokPageView() {
@@ -56,6 +75,7 @@ export default function App() {
   return (
     <>
       <TikTokPageView />
+      <PrivateRobots />
       <Routes>
       <Route path="/" element={<Landing />} />
       <Route path="/download" element={<Download />} />
@@ -71,6 +91,7 @@ export default function App() {
           <Route path="/app/react/:id" element={<Page><ReactHost /></Page>} />
           <Route path="/app/p/:id/data" element={<Page><SiteData /></Page>} />
           <Route path="/app/billing" element={<Page><Billing /></Page>} />
+          <Route path="/app/earnings" element={<Page><PartnerEarnings /></Page>} />
           <Route path="/app/billing/result" element={<Page><BillingResult /></Page>} />
           <Route
             path="/app/admin"

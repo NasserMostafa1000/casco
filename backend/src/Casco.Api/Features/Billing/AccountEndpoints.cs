@@ -1,4 +1,6 @@
 using Casco.Api.Domain;
+using Casco.Api.Features.Auth;
+using Casco.Api.Features.Notifications;
 using Casco.Api.Features.Sites;
 using Casco.Api.Infrastructure;
 using Microsoft.EntityFrameworkCore;
@@ -10,7 +12,7 @@ public static class AccountEndpoints
 {
     public static void MapAccountEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/me", async (HttpContext http, AppDbContext db, SubscriptionService subs, CreditService credits, TemplateCatalog templates) =>
+        app.MapGet("/api/me", async (HttpContext http, AppDbContext db, SubscriptionService subs, CreditService credits, TemplateCatalog templates, IOptions<AppOptions> appOpt) =>
         {
             var userId = http.User.UserId();
             var user = await db.Users.FindAsync(userId) ?? throw new ApiException(401, "الحساب غير موجود", "unauthorized");
@@ -27,6 +29,7 @@ public static class AccountEndpoints
             return Results.Ok(new
             {
                 user = new { user.Id, user.Name, user.Email, user.Role, user.FreeSiteUsed, user.Locale },
+                partner = appOpt.Value.IsPartner(user.Email),
                 plan = new
                 {
                     plan.Key,
@@ -129,6 +132,10 @@ public class SubscriptionMaintenanceService(IServiceScopeFactory scopes, LeaderE
                 var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
                 var subs = scope.ServiceProvider.GetRequiredService<SubscriptionService>();
                 var now = DateTime.UtcNow;
+
+                var welcome = scope.ServiceProvider.GetRequiredService<WelcomeNotifier>();
+                var guest = await db.Users.FirstOrDefaultAsync(u => u.Email == UnlimitedAccount.Email, stoppingToken);
+                if (guest is not null) await welcome.EnsureAsync(guest, stoppingToken);
 
                 var due = await db.Subscriptions
                     .Where(s => s.Plan == Domain.PlanKeys.Pro && (s.CurrentPeriodEnd <= now || s.NextCreditGrantAt <= now))

@@ -32,12 +32,12 @@ public static class ProjectEndpoints
             var userId = http.User.UserId();
             var now = DateTime.UtcNow;
             var projects = await db.Projects.Where(p => p.UserId == userId).OrderByDescending(p => p.UpdatedAt)
-                .Select(p => new { p.Id, p.Name, p.TemplateKey, p.Slug, p.PublishedAt, p.UpdatedAt, p.CreatedAt, p.CustomDomain, p.CustomDomainVerified, p.IsAdminSuspended, p.HostingTier, p.HostingPaidUntil })
+                .Select(p => new { p.Id, p.Name, p.TemplateKey, p.Slug, p.PublishedAt, p.UpdatedAt, p.CreatedAt, p.CustomDomain, p.CustomDomainVerified, p.IsAdminSuspended, p.HostingTier, p.HostingPaidUntil, p.HostingTrial })
                 .ToListAsync();
             return Results.Ok(projects.Select(p =>
             {
                 var grace = billing.Value.Hosting.GraceDaysFor(p.HostingTier);
-                var online = p.HostingTier != null && p.HostingPaidUntil is { } end && end.AddDays(grace) > now;
+                var online = p.HostingTier != null && p.HostingPaidUntil is { } end && (p.HostingTrial ? end > now : end.AddDays(grace) > now);
                 var daysLeft = p.HostingPaidUntil is { } until && until > now ? (int)Math.Ceiling((until - now).TotalDays) : (int?)null;
                 return new
                 {

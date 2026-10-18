@@ -41,7 +41,7 @@ public partial class ProjectService(
     /// </summary>
     public async Task<(Project Project, Guid? TaskId, string? Notice)> CreateAsync(Guid userId, string name, string description, string? templateKey, string? language = null, bool generate = true)
     {
-        description = Text.Truncate(description?.Trim(), 2000);
+        description = Text.Truncate(description?.Trim(), 20_000);
         if (description.Length < 5) throw ApiException.BadRequest("اكتب وصفاً مختصراً للموقع الذي تريده");
         name = Text.Truncate(string.IsNullOrWhiteSpace(name) ? AutoName(description) : name.Trim(), 120);
         if (name.Length < 2) throw ApiException.BadRequest("اكتب اسم الموقع أو النشاط");
@@ -166,7 +166,7 @@ public partial class ProjectService(
     public async Task<Guid> StartTaskAsync(Project project, Guid userId, string kind, string prompt, bool premium, bool freeGrant = false,
         bool recordUserMessage = true, IReadOnlyList<string>? images = null, bool resume = false, string? chatMessage = null)
     {
-        prompt = Text.Truncate(prompt?.Trim(), 4000);
+        prompt = Text.Truncate(prompt?.Trim(), 100_000);
         images ??= [];
         if (resume && prompt.Length < 2) prompt = "كمل البناء";
         if (prompt.Length < 2 && images.Count > 0) prompt = "أضف هذه الصور إلى الموقع في المكان المناسب";

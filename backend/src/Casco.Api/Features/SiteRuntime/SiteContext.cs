@@ -118,7 +118,8 @@ public record SiteRef(
     string? HostingTier,
     DateTime? HostingPaidUntil,
     string SettingsJson,
-    bool IsAdminSuspended = false)
+    bool IsAdminSuspended = false,
+    bool HostingTrial = false)
 {
     private SiteSettings? _settings;
     public SiteSettings Settings => _settings ??= SiteSettings.Parse(SettingsJson);
@@ -142,7 +143,7 @@ public class SiteContext(AppDbContext db, IMemoryCache cache, TokenService token
         {
             site = await db.Projects.AsNoTracking().Where(p => p.SiteKey == siteKey)
                        .Select(p => new SiteRef(p.Id, p.UserId, p.SiteKey, p.AdsRequireApproval, p.CurrentVersionId, p.PublishedVersionId, p.PublishedAt != null,
-                           p.HostingTier, p.HostingPaidUntil, p.SettingsJson, p.IsAdminSuspended))
+                           p.HostingTier, p.HostingPaidUntil, p.SettingsJson, p.IsAdminSuspended, p.HostingTrial))
                        .FirstOrDefaultAsync()
                    ?? throw ApiException.NotFound("الموقع غير موجود");
             cache.Set(key, site, TimeSpan.FromSeconds(30));
@@ -157,9 +158,12 @@ public class SiteContext(AppDbContext db, IMemoryCache cache, TokenService token
     public static Guid? VersionFor(SiteRef site, HttpContext http) =>
         IsPreview(http) || site.PublishedVersionId is null ? site.CurrentVersionId : site.PublishedVersionId;
 
-    public bool IsBackendActive(SiteRef site) =>
-        site.HostingTier == HostingTiers.Backend && site.HostingPaidUntil is { } until
-        && until.AddDays(billing.Value.Hosting.GraceDays) > clock.GetUtcNow().UtcDateTime;
+    public bool IsBackendActive(SiteRef site)
+    {
+        if (site.HostingTier != HostingTiers.Backend || site.HostingPaidUntil is not { } until) return false;
+        var now = clock.GetUtcNow().UtcDateTime;
+        return site.HostingTrial ? until > now : until.AddDays(billing.Value.Hosting.GraceDays) > now;
+    }
 
     /// <summary>
     /// Backend features of a live site stop when its backend hosting is unpaid. Unpublished sites (and the editor preview)

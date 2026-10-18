@@ -74,9 +74,27 @@ public partial class HostingService(AppDbContext db, IMemoryCache cache, SiteRes
         return json is null ? HostingTiers.Static : RequiredTier(SiteFiles.Parse(json));
     }
 
-    public bool IsActive(Project project, string requiredTier = HostingTiers.Static) =>
-        HostingTiers.Rank(project.HostingTier) >= HostingTiers.Rank(requiredTier)
-        && project.HostingPaidUntil is { } until && until.AddDays(Options.GraceDaysFor(project.HostingTier)) > clock.GetUtcNow().UtcDateTime;
+    public bool IsActive(Project project, string requiredTier = HostingTiers.Static)
+    {
+        if (HostingTiers.Rank(project.HostingTier) < HostingTiers.Rank(requiredTier) || project.HostingPaidUntil is not { } until)
+            return false;
+        var now = clock.GetUtcNow().UtcDateTime;
+        return project.HostingTrial ? until > now : until.AddDays(Options.GraceDaysFor(project.HostingTier)) > now;
+    }
+
+    /// <summary>First publish of a site that was never hosted. The link stays online for three days, once.</summary>
+    public bool TryStartTrial(Project project, string requiredTier)
+    {
+        if (requiredTier == HostingTiers.React || IsActive(project, requiredTier)) return false;
+        var now = clock.GetUtcNow().UtcDateTime;
+        var expiredTrial = project.HostingTrial && project.HostingPaidUntil is { } end && end <= now;
+        var expiredPaid = !project.HostingTrial && !string.IsNullOrEmpty(project.HostingTier);
+        if (expiredTrial || expiredPaid) return false;
+        project.HostingTier = requiredTier;
+        project.HostingPaidUntil = now.AddDays(3);
+        project.HostingTrial = true;
+        return true;
+    }
 
     public object Prices() => new
     {
@@ -143,12 +161,33 @@ public partial class HostingService(AppDbContext db, IMemoryCache cache, SiteRes
             var start = project.HostingTier == HostingTiers.React && project.HostingPaidUntil is { } until && until > now ? until : now;
             project.HostingPaidUntil = start.AddYears(Math.Max(1, months / 12));
             project.HostingTier = HostingTiers.React;
+            project.HostingTrial = false;
             await db.SaveChangesAsync();
             Invalidate(project);
             return;
         }
         project.HostingPaidUntil = ExtendUntil(clock.GetUtcNow().UtcDateTime, project.HostingTier, project.HostingPaidUntil, tier, Math.Clamp(months, 1, 36), Options);
         project.HostingTier = tier;
+        project.HostingTrial = false;
+        await db.SaveChangesAsync();
+        Invalidate(project);
+    }
+
+    /// <summary>Turns a server on for seven days, one month, or twelve months. Used when an admin accepts a wallet transfer.</summary>
+    public async Task GrantAsync(Guid projectId, string tier, bool month, bool year = false)
+    {
+        if (HostingTiers.Rank(tier) == 0) throw ApiException.BadRequest("نوع الاستضافة غير صالح");
+        var project = await db.Projects.FirstOrDefaultAsync(p => p.Id == projectId) ?? throw ApiException.NotFound("الموقع غير موجود");
+        var now = clock.GetUtcNow().UtcDateTime;
+        if ((year || month) && tier != HostingTiers.React)
+            project.HostingPaidUntil = ExtendUntil(now, project.HostingTier, project.HostingPaidUntil, tier, year ? 12 : 1, Options);
+        else
+        {
+            var start = project.HostingTier == tier && project.HostingPaidUntil is { } until && until > now ? until : now;
+            project.HostingPaidUntil = year ? start.AddYears(1) : month ? start.AddMonths(1) : start.AddDays(7);
+        }
+        project.HostingTier = tier;
+        project.HostingTrial = false;
         await db.SaveChangesAsync();
         Invalidate(project);
     }

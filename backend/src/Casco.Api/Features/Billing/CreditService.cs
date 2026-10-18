@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Casco.Api.Domain;
+using Casco.Api.Features.Auth;
 using Casco.Api.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -48,8 +49,12 @@ public class CreditService(AppDbContext db, IOptions<BillingOptions> options)
 
     public int CreditsForCost(decimal costUsd) => CreditMath.FromCost(costUsd, _opt.UsdPerCredit);
 
+    public Task<bool> IsUnlimitedAsync(Guid userId) =>
+        db.Users.AsNoTracking().AnyAsync(u => u.Id == userId && u.Email == UnlimitedAccount.Email);
+
     public async Task<CreditBalance> GetBalanceAsync(Guid userId)
     {
+        if (await IsUnlimitedAsync(userId)) return new CreditBalance(1_000_000_000, 0, 0);
         var sums = await db.CreditEntries.Where(e => e.UserId == userId)
             .GroupBy(e => e.Bucket)
             .Select(g => new { Bucket = g.Key, Sum = g.Sum(e => e.Amount) })
@@ -169,7 +174,7 @@ public class CreditService(AppDbContext db, IOptions<BillingOptions> options)
         await gate.WaitAsync();
         try
         {
-            if (credits > 0)
+            if (credits > 0 && !await IsUnlimitedAsync(userId))
             {
                 var balance = await GetBalanceAsync(userId);
                 var charge = Math.Min(credits, Math.Max(0, balance.Available));
@@ -195,7 +200,7 @@ public class CreditService(AppDbContext db, IOptions<BillingOptions> options)
             var reservation = await ActiveAsync(taskId);
             if (reservation is not null) Close(reservation, ReservationStatuses.Settled, ReleaseReasons.Completed, credits);
 
-            if (credits > 0)
+            if (credits > 0 && !await IsUnlimitedAsync(userId))
             {
                 var balance = await GetBalanceAsync(userId);
                 var fromPlan = Math.Min(credits, Math.Max(0, balance.Plan));

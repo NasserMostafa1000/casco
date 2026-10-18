@@ -217,6 +217,62 @@ public static partial class SiteValidator
         return errors;
     }
 
+    [GeneratedRegex(@"(?<![\w:-])(?:\./|/)?((?:[\w.-]+/)*[\w.-]+\.html)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex PageName();
+
+    [GeneratedRegex(@"<script\b[^>]*\bsrc\s*=\s*[""']([^""']+)[""']", RegexOptions.IgnoreCase)]
+    private static partial Regex ScriptSrc();
+
+    /// <summary>
+    /// Errors that block calling a site finished: validation, a React shell that would render blank,
+    /// a page linked from JavaScript, and a local script the HTML loads but the site does not contain.
+    /// </summary>
+    public static List<(string Path, string Error)> CompletionErrors(IReadOnlyDictionary<string, string> files, bool requireReact)
+    {
+        var errors = Validate(files, singlePage: false);
+        if (requireReact || files.Any(f => f.Key.EndsWith(".js", StringComparison.OrdinalIgnoreCase)
+                                            && f.Value.Contains("esm.sh/react", StringComparison.Ordinal)))
+        {
+            foreach (var error in ReactShellErrors(files, files.Keys))
+                errors.Add(("", error));
+        }
+        foreach (var (path, content) in files.Where(f => f.Key.EndsWith(".js", StringComparison.OrdinalIgnoreCase)
+                                                         && !f.Key.StartsWith("server/", StringComparison.Ordinal)))
+        {
+            foreach (Match m in PageName().Matches(content))
+            {
+                if (InUrl(content, m.Groups[1].Index)) continue;
+                var target = m.Groups[1].Value.TrimStart('.', '/');
+                if (target.Length == 0 || files.ContainsKey(target)) continue;
+                errors.Add((path, $"{path} links to {target} {MissingPage}"));
+            }
+        }
+        foreach (var (path, content) in files.Where(f => SiteFiles.IsHtml(f.Key)))
+        {
+            foreach (Match m in ScriptSrc().Matches(content))
+            {
+                var target = m.Groups[1].Value.Trim();
+                if (target.StartsWith("http", StringComparison.OrdinalIgnoreCase) || target.StartsWith("//", StringComparison.Ordinal))
+                    continue;
+                var cut = target.IndexOfAny(['?', '#']);
+                if (cut >= 0) target = target[..cut];
+                target = target.TrimStart('.', '/');
+                if (target.Length == 0 || files.ContainsKey(target)) continue;
+                errors.Add((path, $"{path} loads {target} which is missing; create that file or the page stays blank."));
+            }
+        }
+        return errors.DistinctBy(e => e.Error).ToList();
+    }
+
+    private static bool InUrl(string content, int index)
+    {
+        var start = index;
+        while (start > 0 && !char.IsWhiteSpace(content[start - 1]) && content[start - 1] is not '"' and not '\'' and not '`')
+            start--;
+        var token = content.AsSpan(start, index - start);
+        return token.Contains("://", StringComparison.Ordinal) || token.StartsWith("//");
+    }
+
     /// <summary>Cheap static checks that catch the most common broken outputs and feed the auto-fix loop.</summary>
     public static List<(string Path, string Error)> Validate(IReadOnlyDictionary<string, string> files, bool singlePage)
     {
@@ -314,4 +370,114 @@ public static partial class SiteValidator
             }
         }
     }
+
+    private static readonly string[] VoidTags = ["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"];
+
+    /// <summary>
+    /// React pages stay blank when a void tag is left open or a style is a string.
+    /// Rewrite those before the page is saved. Plain HTML strings that are not htm are left alone.
+    /// </summary>
+    public static void Repair(IDictionary<string, string> files)
+    {
+        foreach (var path in files.Keys.ToList())
+        {
+            if (path.StartsWith("server/", StringComparison.Ordinal)) continue;
+            var html = SiteFiles.IsHtml(path);
+            var script = path.EndsWith(".js", StringComparison.OrdinalIgnoreCase);
+            if (!html && !script) continue;
+            var content = files[path];
+            var htm = content.Contains("esm.sh/htm", StringComparison.Ordinal);
+            if (script && !htm) continue;
+            var repaired = CloseVoidTags(content);
+            if (htm) repaired = StyleStrings().Replace(repaired, match => "style=${" + CssObject(match.Groups[1].Value) + "}");
+            if (!string.Equals(repaired, content, StringComparison.Ordinal)) files[path] = repaired;
+        }
+    }
+
+    private static string CloseVoidTags(string text)
+    {
+        var output = new StringBuilder(text.Length + 32);
+        for (var i = 0; i < text.Length; i++)
+        {
+            if (text[i] != '<' || !TryVoidTag(text, i + 1, out var tagLength))
+            {
+                output.Append(text[i]);
+                continue;
+            }
+            var j = i + 1 + tagLength;
+            char? quote = null;
+            var expr = 0;
+            while (j < text.Length)
+            {
+                var ch = text[j];
+                if (quote is not null)
+                {
+                    if (ch == quote && text[j - 1] != '\\') quote = null;
+                    j++;
+                    continue;
+                }
+                if (expr > 0)
+                {
+                    if (ch is '\'' or '"' or '`') quote = ch;
+                    else if (ch == '{') expr++;
+                    else if (ch == '}') expr--;
+                    j++;
+                    continue;
+                }
+                if (ch is '\'' or '"') { quote = ch; j++; continue; }
+                if (ch == '$' && j + 1 < text.Length && text[j + 1] == '{') { expr = 1; j += 2; continue; }
+                if (ch == '>') break;
+                j++;
+            }
+            if (j >= text.Length) { output.Append(text[i]); continue; }
+            var tag = text[i..j].TrimEnd();
+            output.Append(tag.EndsWith('/') ? text[i..(j + 1)] : tag + " />");
+            i = j;
+        }
+        return output.ToString();
+    }
+
+    private static bool TryVoidTag(string text, int start, out int length)
+    {
+        foreach (var tag in VoidTags)
+        {
+            if (start + tag.Length > text.Length || !text.AsSpan(start, tag.Length).Equals(tag, StringComparison.OrdinalIgnoreCase)) continue;
+            if (start + tag.Length < text.Length && char.IsLetterOrDigit(text[start + tag.Length])) continue;
+            length = tag.Length;
+            return true;
+        }
+        length = 0;
+        return false;
+    }
+
+    private static string CssObject(string css)
+    {
+        var entries = new List<string>();
+        var part = new StringBuilder();
+        var depth = 0;
+        void Add()
+        {
+            var item = part.ToString();
+            part.Clear();
+            var split = item.IndexOf(':');
+            if (split <= 0) return;
+            var key = item[..split].Trim();
+            var value = item[(split + 1)..].Trim();
+            if (key.Length == 0) return;
+            var camel = CssName().Replace(key, m => m.Groups[1].Value.ToUpperInvariant());
+            entries.Add(camel + ": " + JsonSerializer.Serialize(value));
+        }
+        foreach (var ch in css)
+        {
+            if (ch == '(') depth++;
+            else if (ch == ')' && depth > 0) depth--;
+            if (ch == ';' && depth == 0) Add();
+            else part.Append(ch);
+        }
+        if (part.Length > 0) Add();
+        return "{" + string.Join(", ", entries) + "}";
+    }
+
+    [GeneratedRegex(@"style=""([^""]*)""")] private static partial Regex StyleStrings();
+    [GeneratedRegex(@"-([a-z])")] private static partial Regex CssName();
 }

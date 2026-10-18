@@ -235,10 +235,10 @@ export default function Billing() {
             <p className="text-sm font-semibold text-white/80">Casco Pro</p>
             <div className="mt-2 flex items-baseline gap-1">
               <span className="text-5xl font-extrabold tracking-tight">${interval === 'monthly' ? plans.pro.monthlyPrice : plans.pro.yearlyPrice}</span>
-              <span className="text-white/70">{t('مرة واحدة')}</span>
+              <span className="text-lg font-bold text-white">{interval === 'monthly' ? t('شهري') : t('سنوي')}</span>
             </div>
             <p className="mt-4 text-sm leading-relaxed text-white">
-              {t('المبلغ ده مرة واحدة بس، مقابل كود موقعك ومهمة بنائه. مش هيتدفع تاني عشان موقعك يفضل شغال. موقعك هيفضل شغال عادي، لكن مش هتقدر تحدّث الكود بالذكاء الاصطناعي.')}
+              {t('اشتراك Casco Pro لاستوديو ومحرر الأكواد. اكتب الكود وعدّله مع الوكيل، وابنِ مواقعك من نفس المكان.')}
             </p>
             <ul className="mt-6 space-y-2.5 text-sm">
               {[
@@ -267,7 +267,7 @@ export default function Billing() {
               {t('دفع آمن بالبطاقة أو Apple Pay عبر Ziina')}
             </p>
             <p className="mt-2 text-center text-xs text-white/80">
-              {t('الدفع مرة واحدة لبناء الموقع')}
+              {interval === 'monthly' ? t('اشتراك شهري') : t('اشتراك سنوي')}
             </p>
           </div>
           <Card className="p-6 sm:p-7">
@@ -290,7 +290,7 @@ export default function Billing() {
         </div>
       )}
 
-      <WalletRecharge />
+      <WalletRecharge interval={interval} />
 
       <HostedSites />
 
@@ -357,16 +357,16 @@ interface WalletRow {
   createdAt: string
 }
 
-function WalletRecharge() {
+function WalletRecharge({ interval }: { interval: 'monthly' | 'yearly' }) {
   const { refresh } = useAuth()
   const plans = usePlans()
-  const [method, setMethod] = useState<'vodafone_cash' | 'instapay'>('vodafone_cash')
   const [file, setFile] = useState<File | null>(null)
   const [rows, setRows] = useState<WalletRow[]>([])
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
   const phone = plans?.wallet?.phone ?? '01026159280'
-  const amount = plans?.wallet?.amount ?? 680
+  const monthly = plans?.wallet?.amount ?? 680
+  const amount = interval === 'yearly' ? (plans?.wallet?.yearlyAmount ?? monthly * 12) : monthly
   const pending = rows.some((r) => r.status === 'pending')
 
   const load = () =>
@@ -399,7 +399,8 @@ function WalletRecharge() {
     setMsg(null)
     try {
       const fd = new FormData()
-      fd.set('method', method)
+      fd.set('method', 'vodafone_cash')
+      fd.set('interval', interval)
       fd.set('file', file)
       await api('POST', '/api/billing/wallet-transfers', fd)
       setFile(null)
@@ -414,35 +415,14 @@ function WalletRecharge() {
 
   return (
     <Card className="mt-8 p-6 sm:p-7">
-      <h2 className="text-xl font-bold text-ink">{t('فودافون كاش أو إنستا باي')}</h2>
-      <p className="mt-2 text-sm leading-relaxed text-slate-600">
-        {t('حوّل {amount} جنيه على {phone}. سعر الدولار في بوابة الدفع زي ما هو. ادخل بنفس حساب جوجل أو آبل، ومفيش خانة توكن.', {
-          amount: num(amount),
-          phone,
-        })}
-      </p>
+      <h2 className="text-xl font-bold text-ink">
+        {t('{amount} جنيه', { amount: num(amount) })}
+        <span className="text-sm font-normal text-slate-500"> / {interval === 'yearly' ? t('سنة') : t('شهر')}</span>
+      </h2>
       <p className="mt-3 font-mono text-2xl font-extrabold tracking-wide text-ink" dir="ltr">
         {phone}
       </p>
-      <p className="mt-3 text-sm leading-relaxed text-slate-600">
-        {t('يمكنك أيضاً التحويل على محفظة اتصالات كاش لهذا الرقم، ولكن التفعيل قد يكون من دقائق إلى 24 ساعة. أما الدفع بالفيزا فتحويل فوري.')}
-      </p>
-      <div className="mt-4 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => setMethod('vodafone_cash')}
-          className={`rounded-xl px-4 py-2 text-sm font-semibold ${method === 'vodafone_cash' ? 'bg-ink text-white' : 'bg-slate-100 text-slate-700'}`}
-        >
-          {t('فودافون كاش')}
-        </button>
-        <button
-          type="button"
-          onClick={() => setMethod('instapay')}
-          className={`rounded-xl px-4 py-2 text-sm font-semibold ${method === 'instapay' ? 'bg-ink text-white' : 'bg-slate-100 text-slate-700'}`}
-        >
-          {t('إنستا باي')}
-        </button>
-      </div>
+      <p className="mt-3 text-sm leading-relaxed text-slate-600">{t('التفعيل ممكن يتأخر لحد 24 ساعة.')}</p>
       <label className="mt-5 flex cursor-pointer items-center justify-center gap-3 rounded-2xl border-2 border-brand-500 bg-brand-50 px-5 py-4 text-base font-bold text-brand-800 shadow-sm transition hover:bg-brand-100">
         <ImagePlus className="h-6 w-6 shrink-0" />
         <span className="truncate">{file ? file.name : t('اختيار صورة التحويل')}</span>
