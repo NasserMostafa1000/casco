@@ -3,6 +3,7 @@ using System.Text;
 using System.Threading.RateLimiting;
 using Casco.Api.Domain;
 using Casco.Api.Features.Admin;
+using Casco.Api.Features.Ardh;
 using Casco.Api.Features.Ary;
 using Casco.Api.Features.Agent;
 using Casco.Api.Features.Ai;
@@ -323,6 +324,7 @@ app.MapStoreEndpoints();
 app.MapBookingEndpoints();
 app.MapAdminEndpoints();
 app.MapAryFood();
+app.MapArdhAlMusk();
 UploadService.MapUploadFiles(app);
 StockImages.Map(app);
 app.MapGet("/api/templates", (TemplateCatalog templates) =>
