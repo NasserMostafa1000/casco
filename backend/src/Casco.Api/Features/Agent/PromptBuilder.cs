@@ -36,10 +36,12 @@ public static partial class PromptBuilder
     {
         var sharedFiles = ctx.IsNewSite && ctx.Progress is null;
         var shown = SelectFiles(files, ctx.Request, contextBytesLimit);
+        // On edits, large files are sent as numbered excerpts around the request; new sites keep full files.
+        var focus = sharedFiles ? null : ctx.Request;
         return
         [
             new("system", SystemPrompt()),
-            new(sharedFiles ? "system" : "user", FilesMessage(shown, files)),
+            new(sharedFiles ? "system" : "user", FilesMessage(shown, files, focus)),
             new("user", RequestMessage(ctx, files, shown.Count < files.Count))
         ];
     }
@@ -50,10 +52,11 @@ public static partial class PromptBuilder
         sb.AppendLine("Your previous response could not be fully applied. Problems:");
         foreach (var e in errors) sb.AppendLine("- " + e);
         sb.AppendLine();
-        sb.AppendLine("Edits that succeeded are already applied. Current content of the affected files:");
+        sb.AppendLine("Edits that succeeded are already applied. Current content of the affected files (each line is \"N|text\"; omit N| from find):");
         foreach (var path in affectedPaths.Distinct().Where(files.ContainsKey))
-            AppendFile(sb, path, files[path]);
+            AppendFile(sb, path, files[path], focus: null);
         sb.AppendLine("Return a new JSON object containing ONLY the edits still needed to finish the original request and fix these problems.");
+        sb.AppendLine("Prefer small \"edit\" ops with find/replace or start/end lines. Do not rewrite whole files.");
         sb.AppendLine("Do not finish, and do not leave \"remaining\" empty, while any problem above is still true. Fix every problem in this reply.");
         return sb.ToString();
     }
@@ -117,13 +120,14 @@ public static partial class PromptBuilder
         return selected;
     }
 
-    private static string FilesMessage(IReadOnlyDictionary<string, string> shown, IReadOnlyDictionary<string, string> all)
+    private static string FilesMessage(IReadOnlyDictionary<string, string> shown, IReadOnlyDictionary<string, string> all, string? focus)
     {
         var sb = new StringBuilder();
         sb.AppendLine("## Current website files");
+        sb.AppendLine("Each line is shown as N|text (1-based). When you copy text into \"find\", omit the N| prefix. You may also edit with \"start\"/\"end\" line numbers.");
         // Shared assets first: they change least often, which keeps the cached prefix longer.
         foreach (var (path, content) in shown.OrderBy(f => f.Key.StartsWith("assets/") ? 0 : 1).ThenBy(f => f.Key, StringComparer.Ordinal))
-            AppendFile(sb, path, content);
+            AppendFile(sb, path, content, focus);
         var hidden = all.Keys.Where(k => !shown.ContainsKey(k)).ToList();
         if (hidden.Count > 0)
         {
@@ -141,15 +145,17 @@ public static partial class PromptBuilder
     {
         var sb = new StringBuilder();
         sb.AppendLine(ReadReplyHeader);
+        sb.AppendLine("Each line is N|text. Omit N| from find. Prefer start/end line edits for small changes.");
         var used = 0;
         var missing = new List<string>();
         var skipped = new List<string>();
         foreach (var path in requested.Select(p => (p ?? "").Trim().TrimStart('.', '/').Replace('\\', '/')).Where(p => p.Length > 0).Distinct().Take(MaxReadFiles))
         {
             if (!files.TryGetValue(path, out var content)) { missing.Add(path); continue; }
-            var size = Encoding.UTF8.GetByteCount(content);
+            var formatted = FormatFileBody(content, focus: null);
+            var size = Encoding.UTF8.GetByteCount(formatted);
             if (used > 0 && used + size > limit) { skipped.Add(path); continue; }
-            AppendFile(sb, path, content);
+            AppendFile(sb, path, content, focus: null);
             used += size;
         }
         if (missing.Count > 0) sb.AppendLine("These files do not exist: " + string.Join(", ", missing));
@@ -315,11 +321,64 @@ public static partial class PromptBuilder
         return sb.ToString();
     }
 
-    private static void AppendFile(StringBuilder sb, string path, string content)
+    /// <summary>Bytes above this for an edit request send head/tail + windows around matches instead of the whole file.</summary>
+    public const int ExcerptBytes = 12_000;
+    private const int ExcerptHead = 35;
+    private const int ExcerptTail = 20;
+    private const int ExcerptWindow = 22;
+
+    private static void AppendFile(StringBuilder sb, string path, string content, string? focus)
     {
         sb.Append("<<<FILE ").Append(path).AppendLine(">>>");
-        sb.AppendLine(content);
+        var body = FormatFileBody(content, focus);
+        sb.Append(body);
+        if (body.Length == 0 || body[^1] != '\n') sb.AppendLine();
         sb.AppendLine("<<<END FILE>>>");
+    }
+
+    /// <summary>Numbers every line. For large edit contexts, keeps head/tail and windows around request matches.</summary>
+    public static string FormatFileBody(string content, string? focus)
+    {
+        var lines = content.Split(["\r\n", "\n"], StringSplitOptions.None);
+        if (focus is null || Encoding.UTF8.GetByteCount(content) <= ExcerptBytes || lines.Length <= ExcerptHead + ExcerptTail + 10)
+            return NumberLines(lines, Enumerable.Range(0, lines.Length));
+
+        var include = new SortedSet<int>();
+        for (var i = 0; i < Math.Min(ExcerptHead, lines.Length); i++) include.Add(i);
+        for (var i = Math.Max(0, lines.Length - ExcerptTail); i < lines.Length; i++) include.Add(i);
+
+        var words = Words(focus);
+        if (words.Length > 0)
+        {
+            for (var i = 0; i < lines.Length; i++)
+            {
+                var line = Normalize(lines[i]);
+                if (!words.Any(w => line.Contains(w, StringComparison.Ordinal))) continue;
+                var from = Math.Max(0, i - ExcerptWindow);
+                var to = Math.Min(lines.Length - 1, i + ExcerptWindow);
+                for (var j = from; j <= to; j++) include.Add(j);
+            }
+        }
+
+        return NumberLines(lines, include) +
+               (include.Count < lines.Length
+                   ? $"\n… ({lines.Length - include.Count} lines omitted; ask to read this file again only if you need a missing section)\n"
+                   : "");
+    }
+
+    private static string NumberLines(IReadOnlyList<string> lines, IEnumerable<int> indices)
+    {
+        var sb = new StringBuilder();
+        var ordered = indices.OrderBy(i => i).ToList();
+        var prev = -2;
+        foreach (var i in ordered)
+        {
+            if (i < 0 || i >= lines.Count) continue;
+            if (prev >= 0 && i > prev + 1) sb.AppendLine("…");
+            sb.Append(i + 1).Append('|').Append(lines[i]).Append('\n');
+            prev = i;
+        }
+        return sb.ToString();
     }
 
     private static readonly string[] Layouts =
@@ -363,7 +422,8 @@ Reply with ONE JSON object and nothing else:
   "thinking": "First. In the interface language from ## Language: what you are about to change and why, in 1-3 sentences. No code.",
   "summary": "Short friendly explanation, in the interface language from ## Language, of what you changed. 1-3 sentences. No code.",
   "files": [
-    {"path": "index.html", "op": "edit", "edits": [{"find": "exact existing text", "replace": "new text"}]},
+    {"path": "index.html", "op": "edit", "edits": [{"find": "exact text without N|", "replace": "new text"}]},
+    {"path": "assets/home.js", "op": "edit", "edits": [{"start": 21, "end": 23, "replace": "replacement lines"}]},
     {"path": "about.html", "op": "write", "content": "full file content"},
     {"path": "old.html", "op": "delete"}
   ],
@@ -374,11 +434,13 @@ Reply with ONE JSON object and nothing else:
 Editing rules:
 - Always write "thinking" before "files", so the user can see what you are doing while the files stream.
 - After every successful build or edit (when you return files, or when remaining is empty), include "suggestions": 5 to 8 short prompts the owner can tap next. Each suggestion is one sentence in the interface language from ## Language, under 90 characters, written as something they would send in the chat. Cover concrete ideas for THIS site: change photos, change colors, replace the logo, tweak a section, add WhatsApp, improve text, add FAQ, adjust the hero. Do not repeat the request you just finished. Skip "suggestions" only when you return "questions" and no files.
-- Prefer "edit" with small targeted find/replace pairs. Output tokens are expensive: never rewrite a whole existing file unless most of it changes. Exception: a brand-new site's HTML pages are full rewrites (op write) so the design is original.
-- "find" must be copied EXACTLY from the current file (same characters and whitespace) and must be unique in that file. Keep it short but unambiguous (usually 1-5 lines).
+- Cheap edits: for an existing file, ALWAYS prefer op "edit". Use either (a) find/replace of 1-5 unique lines, or (b) "start" and "end" 1-based line numbers from the N| prefix with "replace" as the new lines. Never return the whole file for a small change. Output tokens are expensive.
+- Files are shown as N|text. Never put the N| prefix inside "find" or "replace". Empty lines in the real file are kept; do not renumber by skipping them.
+- "find" must be copied EXACTLY from the file body after the N| (same characters and whitespace) and must be unique in that file.
+- Use op "write" only for brand-new files, or when most of an existing file must change. A brand-new site's HTML/JS pages may use write. For a one-line or one-section tweak, write of the whole file is wrong.
 - Write files with real line breaks: one statement per line. Never put a whole HTML or JavaScript file on one or two lines. A minified line hides syntax errors and leaves the site as a blank white page.
-- Edits to the same file are applied in order; a later "find" must match the text as it is after earlier edits.
-- Use "write" only for new files or complete rewrites. Allowed file types: .html .css .js .svg .json .txt .xml, paths like "page.html" or "assets/app.js".
+- Edits to the same file are applied in order; a later "find" or line range must match the text as it is after earlier edits.
+- Allowed file types: .html .css .js .svg .json .txt .xml, paths like "page.html" or "assets/app.js".
 - If the request is unclear and it is not a new website, return "files": [] and "questions" so the user can pick an answer. A new website request is never unclear enough to skip the files: build the pages from what the user wrote, and put any missing contact detail in the summary after the site exists.
 - Never treat the site as finished while any error remains: a syntax error, a packed file, a missing page, a missing script, or a React template that would leave the page blank. Fix all of them before you leave "remaining" empty. Link only to pages you create in this reply or that already exist.
 - Big sites show only some files in full plus a site map of the rest. Never "edit" a file you have not seen: if a file you must change is only in the site map, first reply with ONLY {"read": ["page.html"], "files": []} (at most 6 files, only what you need); you will get them and then make the edits.

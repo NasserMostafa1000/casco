@@ -46,6 +46,10 @@ public class AiEdit
 {
     [JsonPropertyName("find")] public string? Find { get; set; }
     [JsonPropertyName("replace")] public string? Replace { get; set; }
+    /// <summary>1-based inclusive start line. When set, replaces that line range instead of using find.</summary>
+    [JsonPropertyName("start")] public int? Start { get; set; }
+    /// <summary>1-based inclusive end line. Defaults to start when omitted.</summary>
+    [JsonPropertyName("end")] public int? End { get; set; }
 }
 
 public record EditConstraints(bool SinglePage, int MaxFiles, int MaxFileBytes, int MaxTotalBytes);
@@ -124,11 +128,26 @@ public static partial class EditApplier
                     }
                     foreach (var edit in op.Edits ?? [])
                     {
-                        if (string.IsNullOrEmpty(edit.Find)) { errors.Add($"edit {path}: empty find"); affected.Add(path); continue; }
-                        var replaced = ReplaceOnce(content, edit.Find, edit.Replace ?? "");
+                        if (edit.Start is int startLine)
+                        {
+                            var endLine = edit.End ?? startLine;
+                            var byLine = ReplaceLines(content, startLine, endLine, edit.Replace ?? "");
+                            if (byLine is null)
+                            {
+                                errors.Add($"edit {path}: lines {startLine}-{endLine} are out of range.");
+                                affected.Add(path);
+                                continue;
+                            }
+                            content = byLine;
+                            changed.Add(path);
+                            continue;
+                        }
+                        var find = StripLineNumbers(edit.Find ?? "");
+                        if (string.IsNullOrEmpty(find)) { errors.Add($"edit {path}: empty find"); affected.Add(path); continue; }
+                        var replaced = ReplaceOnce(content, find, edit.Replace ?? "");
                         if (replaced is null)
                         {
-                            errors.Add($"edit {path}: this find text was not found: \"{Preview(edit.Find)}\"");
+                            errors.Add($"edit {path}: this find text was not found: \"{Preview(find)}\"");
                             affected.Add(path);
                             continue;
                         }
@@ -175,6 +194,31 @@ public static partial class EditApplier
             : null;
     }
 
+    /// <summary>1-based inclusive line replace. Keeps the file's newline style from the first line break.</summary>
+    public static string? ReplaceLines(string content, int start, int end, string replace)
+    {
+        if (start < 1 || end < start) return null;
+        var nl = content.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+        var lines = content.Split(["\r\n", "\n"], StringSplitOptions.None);
+        if (end > lines.Length) return null;
+        var inserted = replace.Split(["\r\n", "\n"], StringSplitOptions.None);
+        var next = new List<string>(lines.Length - (end - start + 1) + inserted.Length);
+        next.AddRange(lines.Take(start - 1));
+        next.AddRange(inserted);
+        next.AddRange(lines.Skip(end));
+        return string.Join(nl, next);
+    }
+
+    /// <summary>Removes leading "12|" markers if the model copied numbered context into find.</summary>
+    public static string StripLineNumbers(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return text;
+        var lines = text.Split(["\r\n", "\n"], StringSplitOptions.None);
+        if (lines.Length == 0 || !lines.All(l => LineNumberPrefix().IsMatch(l) || l.Length == 0))
+            return text;
+        return string.Join("\n", lines.Select(l => LineNumberPrefix().Replace(l, "")));
+    }
+
     private static string Preview(string s)
     {
         var one = Whitespace().Replace(s, " ").Trim();
@@ -182,6 +226,7 @@ public static partial class EditApplier
     }
 
     [GeneratedRegex(@"\s+")] private static partial Regex Whitespace();
+    [GeneratedRegex(@"^\s*\d+\|")] private static partial Regex LineNumberPrefix();
 }
 
 public static partial class SiteValidator

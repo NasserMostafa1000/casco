@@ -46,6 +46,46 @@ public class AgentTests
     }
 
     [Fact]
+    public void Applies_line_range_edits_and_strips_numbered_find()
+    {
+        var byLine = EditApplier.Apply(Site(), new AiEditResponse
+        {
+            Files = [new AiFileOp { Path = "index.html", Op = "edit", Edits =
+            [
+                new AiEdit { Start = 3, End = 3, Replace = "    <h1>مرحبا</h1>" }
+            ] }]
+        }, Pro);
+        Assert.Empty(byLine.Errors);
+        Assert.Contains("<h1>مرحبا</h1>", byLine.Files["index.html"]);
+
+        var numberedFind = EditApplier.Apply(Site(), new AiEditResponse
+        {
+            Files = [new AiFileOp { Path = "index.html", Op = "edit", Edits =
+            [
+                new AiEdit { Find = "1|<html><head><title>X</title></head>", Replace = "<html><head><title>Z</title></head>" }
+            ] }]
+        }, Pro);
+        Assert.Empty(numberedFind.Errors);
+        Assert.Contains("<title>Z</title>", numberedFind.Files["index.html"]);
+    }
+
+    [Fact]
+    public void Numbers_file_lines_and_excerpts_large_edit_context()
+    {
+        var small = PromptBuilder.FormatFileBody("a\nb\nc", focus: null);
+        Assert.Equal("1|a\n2|b\n3|c\n", small);
+
+        // Must exceed ExcerptBytes so only head/tail + match windows are sent.
+        var big = string.Join('\n', Enumerable.Range(1, 400).Select(i =>
+            i == 100 ? "MATCH_TOKEN here" : $"line-{i}-" + new string('x', 40)));
+        var excerpt = PromptBuilder.FormatFileBody(big, "MATCH_TOKEN");
+        Assert.Contains("1|line-1-", excerpt);
+        Assert.Contains("100|MATCH_TOKEN here", excerpt);
+        Assert.Contains('…', excerpt);
+        Assert.DoesNotContain("50|line-50-", excerpt);
+    }
+
+    [Fact]
     public void Reports_missing_find_text_and_keeps_other_edits()
     {
         var response = new AiEditResponse
