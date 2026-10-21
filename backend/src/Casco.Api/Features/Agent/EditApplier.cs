@@ -18,6 +18,8 @@ public class AiEditResponse
     [JsonPropertyName("read")] public List<string>? Read { get; set; }
     /// <summary>Choices the model needs from the user before it can change the site.</summary>
     [JsonPropertyName("questions")] public List<AiQuestion>? Questions { get; set; }
+    /// <summary>Short next-step edit ideas for the chat, in the interface language.</summary>
+    [JsonPropertyName("suggestions")] public List<string>? Suggestions { get; set; }
 }
 
 public class AiQuestion

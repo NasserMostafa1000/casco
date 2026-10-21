@@ -367,11 +367,13 @@ Reply with ONE JSON object and nothing else:
     {"path": "about.html", "op": "write", "content": "full file content"},
     {"path": "old.html", "op": "delete"}
   ],
-  "remaining": ""
+  "remaining": "",
+  "suggestions": ["5 to 8 short next edits the owner can send in chat, in the interface language"]
 }
 
 Editing rules:
 - Always write "thinking" before "files", so the user can see what you are doing while the files stream.
+- After every successful build or edit (when you return files, or when remaining is empty), include "suggestions": 5 to 8 short prompts the owner can tap next. Each suggestion is one sentence in the interface language from ## Language, under 90 characters, written as something they would send in the chat. Cover concrete ideas for THIS site: change photos, change colors, replace the logo, tweak a section, add WhatsApp, improve text, add FAQ, adjust the hero. Do not repeat the request you just finished. Skip "suggestions" only when you return "questions" and no files.
 - Prefer "edit" with small targeted find/replace pairs. Output tokens are expensive: never rewrite a whole existing file unless most of it changes. Exception: a brand-new site's HTML pages are full rewrites (op write) so the design is original.
 - "find" must be copied EXACTLY from the current file (same characters and whitespace) and must be unique in that file. Keep it short but unambiguous (usually 1-5 lines).
 - Write files with real line breaks: one statement per line. Never put a whole HTML or JavaScript file on one or two lines. A minified line hides syntax errors and leaves the site as a blank white page.

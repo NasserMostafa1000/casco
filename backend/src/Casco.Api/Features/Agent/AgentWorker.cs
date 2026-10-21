@@ -258,6 +258,7 @@ public partial class AgentTaskRunner(
         var freeDirtyRounds = 0;
         var freeSameErrors = 0;
         var freeErrorSignature = "";
+        List<string>? replySuggestions = null;
         // State after the last completed part: a part that cannot finish is dropped as a whole, never kept half-applied.
         var completedParts = 0;
         var good = (Files: files, Remaining: (string?)null, Changed: new HashSet<string>(StringComparer.Ordinal));
@@ -365,6 +366,7 @@ public partial class AgentTaskRunner(
                 }
                 if (!string.IsNullOrWhiteSpace(parsed.Summary)) summary = parsed.Summary.Trim();
                 remaining = string.IsNullOrWhiteSpace(parsed.Remaining) ? null : parsed.Remaining.Trim();
+                if (SuggestionList(parsed) is { Count: > 0 } nextIdeas) replySuggestions = nextIdeas;
                 var applied = EditApplier.Apply(files, parsed, constraints);
                 files = applied.Files;
                 SiteValidator.Repair(files);
@@ -485,7 +487,7 @@ public partial class AgentTaskRunner(
 
         // A later part that produced nothing still leaves the build resumable.
         if (stop == BuildStop.None && remaining is not null) stop = BuildStop.Interrupted;
-        await FinishAsync(task, project, plan, files, done, remaining, stop, parts, changed, remainingErrors.Count > 0, thoughts);
+        await FinishAsync(task, project, plan, files, done, remaining, stop, parts, changed, remainingErrors.Count > 0, thoughts, replySuggestions);
     }
 
     private static string WithThoughts(string message, IReadOnlyList<string> thoughts)
@@ -526,7 +528,8 @@ public partial class AgentTaskRunner(
     }
 
     private async Task FinishAsync(AgentTask task, Project project, PlanInfo plan, SortedDictionary<string, string> files, List<string> done,
-        string? remaining, BuildStop stop, int parts, IReadOnlyCollection<string> changed, bool hadErrors, IReadOnlyList<string>? thoughts = null)
+        string? remaining, BuildStop stop, int parts, IReadOnlyCollection<string> changed, bool hadErrors, IReadOnlyList<string>? thoughts = null,
+        IReadOnlyList<string>? suggestions = null)
     {
         files = SiteFiles.ReplaceTokens(files, project.Name, project.Description);
         if (task.IsFreeGrant)
@@ -576,7 +579,7 @@ public partial class AgentTaskRunner(
             var email = await db.Users.AsNoTracking().Where(u => u.Id == task.UserId).Select(u => u.Email).FirstOrDefaultAsync();
             message += "\n\n" + OwnerGuide(email, HostingService.Features(files));
         }
-        await CompleteAsync(task, project, version.Id, message, plan);
+        await CompleteAsync(task, project, version.Id, message, plan, suggestionsJson: SuggestionJson(suggestions));
         await PruneVersionsAsync(project);
     }
 
@@ -662,7 +665,7 @@ public partial class AgentTaskRunner(
         await db.ProjectVersions.Where(v => v.ProjectId == project.Id && v.Number <= cutoff && !keep.Contains(v.Id)).ExecuteDeleteAsync();
     }
 
-    private async Task CompleteAsync(AgentTask task, Project project, Guid? versionId, string message, PlanInfo plan, string? questionsJson = null)
+    private async Task CompleteAsync(AgentTask task, Project project, Guid? versionId, string message, PlanInfo plan, string? questionsJson = null, string? suggestionsJson = null)
     {
         var charged = 0;
         if (task.IsFreeGrant)
@@ -693,7 +696,17 @@ public partial class AgentTaskRunner(
                            $"فودافون كاش أو إنستا باي {WalletPay.AmountMinor / 100} جنيه على {WalletPay.Phone} مع صورة التحويل، أو ادفع بالدولار من بوابة الدفع.";
         }
 
-        db.ChatMessages.Add(new ChatMessage { ProjectId = project.Id, Role = "assistant", Content = message, TaskId = task.Id, Credits = charged, QuestionsJson = questionsJson });
+        if (questionsJson is null && suggestionsJson is null && versionId is not null)
+        {
+            var locale = await db.Users.AsNoTracking().Where(u => u.Id == task.UserId).Select(u => u.Locale).FirstOrDefaultAsync();
+            suggestionsJson = DefaultSuggestionsJson(locale);
+        }
+
+        db.ChatMessages.Add(new ChatMessage
+        {
+            ProjectId = project.Id, Role = "assistant", Content = message, TaskId = task.Id, Credits = charged,
+            QuestionsJson = questionsJson, SuggestionsJson = suggestionsJson
+        });
         await db.SaveChangesAsync();
         SiteContext.Invalidate(cache, project.SiteKey);
     }
@@ -737,6 +750,61 @@ public partial class AgentTaskRunner(
         return start is "مين" or "ايه" or "إيه" or "ليه" or "ازاي" or "إزاي" or "هل" or "كيف" or "لماذا" or "ما" or "ايش" or "وش"
             or "what" or "who" or "why" or "how" or "when" or "where";
     }
+
+    private static List<string>? SuggestionList(AiEditResponse parsed)
+    {
+        var list = (parsed.Suggestions ?? [])
+            .Select(s => (s ?? "").Trim())
+            .Where(s => s.Length is > 0 and <= 120)
+            .Distinct(StringComparer.Ordinal)
+            .Take(8)
+            .ToList();
+        return list.Count >= 5 ? list : null;
+    }
+
+    private static string? SuggestionJson(IReadOnlyList<string>? suggestions)
+    {
+        if (suggestions is null || suggestions.Count == 0) return null;
+        var list = suggestions.Select(s => s.Trim()).Where(s => s.Length is > 0 and <= 120).Distinct(StringComparer.Ordinal).Take(8).ToList();
+        return list.Count == 0 ? null : JsonSerializer.Serialize(list);
+    }
+
+    private static string DefaultSuggestionsJson(string? locale) => locale switch
+    {
+        "en" => JsonSerializer.Serialize(new[]
+        {
+            "Change the site photos to match my business",
+            "Change the colors to fit my brand",
+            "Replace the logo with my logo image",
+            "Make the hero text clearer and more persuasive",
+            "Add a floating WhatsApp button",
+            "Add a customer reviews section",
+            "Add a FAQ section",
+            "Improve the contact section"
+        }),
+        "hi" => JsonSerializer.Serialize(new[]
+        {
+            "साइट की तस्वीरें मेरे व्यवसाय के अनुसार बदलें",
+            "रंग मेरी ब्रांड के हिसाब से बदलें",
+            "लोगो को मेरी लोगो इमेज से बदलें",
+            "हीरो टेक्स्ट को और स्पष्ट और आकर्षक बनाएं",
+            "फ्लोटिंग WhatsApp बटन जोड़ें",
+            "ग्राहक समीक्षा सेक्शन जोड़ें",
+            "FAQ सेक्शन जोड़ें",
+            "संपर्क सेक्शन सुधारें"
+        }),
+        _ => JsonSerializer.Serialize(new[]
+        {
+            "غيّر صور الموقع لتناسب نشاطي",
+            "غيّر ألوان الموقع لتتماشى مع علامتي",
+            "استبدل صورة اللوجو باللوجو الخاص بي",
+            "حسّن نص الهيرو ليكون أوضح وأقوى",
+            "أضف زر واتساب عائم",
+            "أضف قسم آراء العملاء",
+            "أضف قسم الأسئلة الشائعة",
+            "حسّن قسم التواصل"
+        })
+    };
 
     /// <summary>One recommended option per question. Null when the model did not ask anything usable.</summary>
     private static string? QuestionJson(AiEditResponse parsed)

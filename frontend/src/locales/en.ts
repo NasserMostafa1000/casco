@@ -392,6 +392,7 @@ const en: Record<string, string> = {
   "العميل بيدفع 18$ أو 180$ كام مرة؟": "How many times does the customer pay $18 or $180?",
   "مرة واحدة بس، مقابل كود موقعه ومهمة بنائه. المبلغ مش بيتدفع تاني عشان الموقع يفضل شغال. الموقع هيفضل شغال عادي، لكن مش هيقدر يحدّث الكود بالذكاء الاصطناعي.": "Once, for their website code and the work of building it. It is not paid again to keep the site online. The site stays up and working, but they will not be able to update the code with AI.",
   "الطلب المجاني اتستخدم. سجّل الدخول بنفس حساب جوجل أو آبل واشحن حسابك من صفحة الفوترة، من غير ما تلصق أي توكن.": "The free request has been used. Sign in with the same Google or Apple account and recharge from the billing page. Do not paste a token.",
+  "الخطة المجانية تتيح موقعاً واحداً فقط، وحذفه لا يفتح موقع جديد. للتعديل أو إنشاء موقع تاني اشترك في Pro من صفحة الفوترة، بنفس حساب جوجل أو آبل ومن غير ما تلصق أي توكن.": "The free plan allows only one site, and deleting it does not unlock a new one. To edit or create another site, subscribe to Pro from the billing page with the same Google or Apple account, without pasting a token.",
   "دفع بناء الموقع مرة واحدة": "One-time website build payment",
   "بفكر في الرد...": "Thinking of a reply...",
   "مقترح": "Recommended",

@@ -100,7 +100,7 @@ export default function NewProject() {
         await refresh()
         navigate(`/app/p/${r.id}`, { replace: true })
       } catch (err) {
-        if (err instanceof ApiError && err.code === 'free_prompt_limit') setFreeLimit(true)
+        if (err instanceof ApiError && (err.code === 'free_prompt_limit' || err.code === 'free_site_used')) setFreeLimit(true)
         else setError(errorMessage(err))
         setSent(null)
         setSentPreviews([])
@@ -367,7 +367,7 @@ export default function NewProject() {
         </form>
       </footer>
       <Modal open={freeLimit} onClose={() => setFreeLimit(false)} title={t('عدّل موقعك بالذكاء الاصطناعي')}>
-        <p className="text-slate-600">{t('الطلب المجاني اتستخدم. سجّل الدخول بنفس حساب جوجل أو آبل واشحن حسابك من صفحة الفوترة، من غير ما تلصق أي توكن.')}</p>
+        <p className="text-slate-600">{t('الخطة المجانية تتيح موقعاً واحداً فقط، وحذفه لا يفتح موقع جديد. للتعديل أو إنشاء موقع تاني اشترك في Pro من صفحة الفوترة، بنفس حساب جوجل أو آبل ومن غير ما تلصق أي توكن.')}</p>
         <Link to="/app/billing" className="mt-6 flex h-12 items-center justify-center rounded-xl bg-gradient-to-r from-brand-600 to-fuchsia-500 font-semibold text-white shadow-lg shadow-brand-600/25">
           {t('اشترك الآن بـ {price} شهرياً', { price: usd(plans?.pro.monthlyPrice) })}
         </Link>

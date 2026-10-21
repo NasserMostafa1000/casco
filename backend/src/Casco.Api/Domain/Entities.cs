@@ -370,6 +370,8 @@ public class ChatMessage
     public string? ImagesJson { get; set; }
     /// <summary>JSON questions the model asked when it needed a decision. Empty after the user answers by sending the next message.</summary>
     public string? QuestionsJson { get; set; }
+    /// <summary>JSON string array of 5–8 next-edit ideas shown under the assistant reply.</summary>
+    public string? SuggestionsJson { get; set; }
     public Guid? TaskId { get; set; }
     public int? Credits { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

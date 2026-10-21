@@ -147,6 +147,7 @@ export interface ChatMsg {
   taskId: string | null
   images: string[] | null
   questions: ChatQuestion[] | null
+  suggestions: string[] | null
 }
 
 export interface ProjectDetail {

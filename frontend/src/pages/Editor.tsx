@@ -700,6 +700,20 @@ export default function Editor() {
                     {m.questions && m.questions.length > 0 && m.id === latestMessageId && !busy && (
                       <PlanQuestions questions={m.questions} busy={sending} onAnswer={(text) => void send(text)} />
                     )}
+                    {m.suggestions && m.suggestions.length > 0 && m.id === latestMessageId && !busy && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {m.suggestions.map((s) => (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => setInput(s)}
+                            className="rounded-full border border-brand-200 bg-brand-50 px-3 py-1.5 text-start text-xs text-brand-800 transition hover:border-brand-400 hover:bg-brand-100"
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     {m.credits !== null && m.credits > 0 && (
                       <p className="mt-1 flex items-center gap-1 px-1 text-[11px] text-slate-400">
                         <Zap className="h-3 w-3" />
@@ -765,7 +779,7 @@ export default function Editor() {
                 </Alert>
               </div>
             )}
-            {!busy && attachments.length === 0 && !(isPro && hints.length > 0) && (
+            {!busy && attachments.length === 0 && !(isPro && hints.length > 0) && !(project.messages.find((m) => m.id === latestMessageId)?.suggestions?.length) && (
               <div className="scrollbar-none -mx-3 mb-2 flex gap-2 overflow-x-auto px-3">
                 {suggestions.map((s) => (
                   <button

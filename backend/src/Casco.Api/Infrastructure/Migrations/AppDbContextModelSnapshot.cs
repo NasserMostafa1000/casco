@@ -493,6 +493,9 @@ namespace Casco.Api.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("SuggestionsJson")
+                        .HasColumnType("text");
+
                     b.Property<Guid?>("TaskId")
                         .HasColumnType("uuid");
 

@@ -47,6 +47,14 @@ public partial class ProjectService(
         if (name.Length < 2) throw ApiException.BadRequest("اكتب اسم الموقع أو النشاط");
 
         var plan = await subscriptions.GetPlanAsync(userId);
+        if (!plan.IsPro)
+        {
+            var freeUser = await db.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => u.FreeSiteUsed).FirstOrDefaultAsync();
+            if (freeUser)
+                throw ApiException.Payment(
+                    "الخطة المجانية تتيح موقعاً واحداً فقط. حذفه لا يفتح موقع جديد. اشترك في Pro لإنشاء مواقع أكثر.",
+                    "free_site_used");
+        }
         var count = await db.Projects.CountAsync(p => p.UserId == userId);
         if (count >= plan.MaxProjects)
             throw ApiException.Payment(plan.IsPro
@@ -195,8 +203,17 @@ public partial class ProjectService(
                 freeGrant = unfinished.IsFreeGrant;
             else
             {
+                var free = await db.Users.AsNoTracking()
+                    .Where(u => u.Id == userId)
+                    .Select(u => new { u.FreeSiteUsed, u.ShareRewardClaimed })
+                    .FirstOrDefaultAsync();
+                // FreeSiteUsed stays after delete, so a free account cannot burn a second site or keep editing.
+                if (free?.FreeSiteUsed == true)
+                    throw ApiException.Payment(
+                        "الطلب المجاني خلّص. التعديل وإنشاء موقع تاني يحتاجان Casco Pro. سجّل الدخول بنفس حساب جوجل أو آبل واشحن من صفحة الفوترة.",
+                        "free_prompt_limit");
                 var usedPrompts = await db.AgentTasks.CountAsync(t => t.UserId == userId && t.ContinuesTaskId == null);
-                var bonus = await db.Users.Where(u => u.Id == userId && u.ShareRewardClaimed).AnyAsync() ? ShareReward.BonusPrompts : 0;
+                var bonus = free is { ShareRewardClaimed: true } ? ShareReward.BonusPrompts : 0;
                 if (usedPrompts >= ShareReward.FreePrompts + bonus)
                     throw ApiException.Payment("الطلب المجاني اتستخدم. سجّل الدخول بنفس حساب جوجل أو آبل واشحن حسابك من صفحة الفوترة.", "free_prompt_limit");
                 freeGrant = true;
@@ -308,6 +325,14 @@ public partial class ProjectService(
         name = Text.Truncate(name?.Trim(), 120);
         if (name.Length < 2) throw ApiException.BadRequest("اكتب اسم التطبيق");
         var plan = await subscriptions.GetPlanAsync(userId);
+        if (!plan.IsPro)
+        {
+            var freeUser = await db.Users.AsNoTracking().Where(u => u.Id == userId).Select(u => u.FreeSiteUsed).FirstOrDefaultAsync();
+            if (freeUser)
+                throw ApiException.Payment(
+                    "الخطة المجانية تتيح موقعاً واحداً فقط. حذفه لا يفتح موقع جديد. اشترك في Pro لإنشاء مواقع أكثر.",
+                    "free_site_used");
+        }
         var count = await db.Projects.CountAsync(p => p.UserId == userId);
         if (count >= plan.MaxProjects)
             throw ApiException.Payment(plan.IsPro

@@ -73,12 +73,13 @@ public static class ProjectEndpoints
             var versions = await db.ProjectVersions.Where(v => v.ProjectId == id).OrderByDescending(v => v.Number)
                 .Select(v => new { v.Id, v.Number, v.Summary, v.Prompt, v.Model, v.Parts, v.FilesChanged, v.CreatedAt }).Take(50).ToListAsync();
             var messages = (await db.ChatMessages.Where(m => m.ProjectId == id).OrderByDescending(m => m.Id).Take(100)
-                    .Select(m => new { m.Id, m.Role, m.Content, m.Credits, m.CreatedAt, m.TaskId, m.ImagesJson, m.QuestionsJson }).ToListAsync())
+                    .Select(m => new { m.Id, m.Role, m.Content, m.Credits, m.CreatedAt, m.TaskId, m.ImagesJson, m.QuestionsJson, m.SuggestionsJson }).ToListAsync())
                 .Select(m => new
                 {
                     m.Id, m.Role, m.Content, m.Credits, m.CreatedAt, m.TaskId,
                     images = m.ImagesJson is null ? null : JsonSerializer.Deserialize<List<string>>(m.ImagesJson),
-                    questions = m.QuestionsJson is null ? null : JsonSerializer.Deserialize<List<ChatQuestion>>(m.QuestionsJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+                    questions = m.QuestionsJson is null ? null : JsonSerializer.Deserialize<List<ChatQuestion>>(m.QuestionsJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }),
+                    suggestions = m.SuggestionsJson is null ? null : JsonSerializer.Deserialize<List<string>>(m.SuggestionsJson)
                 }).ToList();
             var activeTask = await db.AgentTasks
                 .Where(t => t.ProjectId == id && (t.Status == TaskStatuses.Queued || t.Status == TaskStatuses.Running))
