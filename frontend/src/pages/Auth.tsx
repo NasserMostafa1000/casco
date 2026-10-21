@@ -12,7 +12,7 @@ import { useAuth } from '../lib/auth'
 import { getAuthConfig } from '../lib/externalAuth'
 import { t } from '../lib/i18n'
 import { trackRegistration } from '../lib/tiktok'
-import { PENDING_PROMPT_KEY } from './Landing'
+import { PENDING_PROMPT_KEY } from '../lib/pendingPrompt'
 
 function Shell({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
   return (
@@ -62,7 +62,7 @@ function afterAuthPath() {
     sessionStorage.removeItem('casco_next')
     return next
   }
-  return localStorage.getItem(PENDING_PROMPT_KEY) ? '/app/new' : '/app'
+  return localStorage.getItem(PENDING_PROMPT_KEY) ? '/' : '/app'
 }
 
 export function Login() {

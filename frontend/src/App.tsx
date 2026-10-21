@@ -6,7 +6,6 @@ import { identifyUser, trackView } from './lib/tiktok'
 import { Spinner } from './components/ui'
 import Dashboard from './pages/Dashboard'
 import Settings from './pages/Settings'
-import Landing from './pages/Landing'
 import Download from './pages/Download'
 import { Login, Register } from './pages/Auth'
 import { DesktopConnect } from './pages/DesktopConnect'
@@ -77,7 +76,7 @@ export default function App() {
       <TikTokPageView />
       <PrivateRobots />
       <Routes>
-      <Route path="/" element={<Landing />} />
+      <Route path="/" element={<NewProject />} />
       <Route path="/download" element={<Download />} />
       <Route path="/login" element={<Login />} />
       <Route path="/desktop" element={<DesktopConnect />} />

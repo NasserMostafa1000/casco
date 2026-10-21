@@ -12,7 +12,7 @@ import { MAX_VIDEO_BYTES, MEDIA_ACCEPT, isMediaFile, isVideoFile, prepareImage }
 import { getLang, num, t } from '../lib/i18n'
 import { usd, usePlans } from '../lib/plans'
 import { clearPendingMedia, pendingMedia, setPendingMedia } from '../lib/pendingMedia'
-import { PENDING_PROMPT_KEY } from './Landing'
+import { PENDING_PROMPT_KEY } from '../lib/pendingPrompt'
 
 const MAX_ATTACHMENTS = 10
 
@@ -55,6 +55,15 @@ export default function NewProject() {
   const [freeLimit, setFreeLimit] = useState(false)
   const plans = usePlans()
   const box = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    document.title = 'Casco Studio'
+    document.querySelector('meta[name="description"]')?.setAttribute(
+      'content',
+      'Casco Studio — اكتب وصف موقعك في الشات وابنِه بالذكاء الاصطناعي.',
+    )
+    document.querySelector('link[rel="canonical"]')?.setAttribute('href', 'https://casco.studio/')
+  }, [])
 
   useEffect(() => {
     if (!me) return
