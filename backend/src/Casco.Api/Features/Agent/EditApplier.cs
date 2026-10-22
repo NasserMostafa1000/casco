@@ -360,6 +360,8 @@ public static partial class SiteValidator
                 errors.Add((path, $"{path} uses htm fragment shorthand <>...</> which crashes in the browser (empty tag name). Use <${{React.Fragment}}>…</${{React.Fragment}}> or wrap siblings in one <div>."));
             if (LooksJsonEscaped(content))
                 errors.Add((path, $"{path} looks JSON-escaped (literal \\u003C / \\u0022). Write the real file text with normal quotes and tags, not escape sequences."));
+            if (HasUnsafeDomTranslateObserver(content))
+                errors.Add((path, $"{path} watches the whole document with MutationObserver and rewrites text on every change, which freezes the page. For a language switch: update labels on click only, or debounce the observer with setTimeout, and never call a full TreeWalker translate from an undebounced MutationObserver."));
         }
         foreach (var (path, content) in files.Where(f => SiteFiles.IsHtml(f.Key)))
         {
@@ -372,6 +374,24 @@ public static partial class SiteValidator
 
     [GeneratedRegex(@"html\s*`[^`]*<>", RegexOptions.Singleline)]
     private static partial Regex HtmEmptyFragment();
+
+    /// <summary>
+    /// Language toggles that run a full text TreeWalker from an undebounced MutationObserver on document.body
+    /// freeze the editor preview (every DOM change retriggers a full walk).
+    /// </summary>
+    private static bool HasUnsafeDomTranslateObserver(string content)
+    {
+        if (!content.Contains("MutationObserver", StringComparison.Ordinal)) return false;
+        if (!content.Contains("SHOW_TEXT", StringComparison.Ordinal) && !content.Contains("createTreeWalker", StringComparison.Ordinal))
+            return false;
+        if (ImmediateTranslateObserver().IsMatch(content)) return true;
+        return content.Contains("subtree: true", StringComparison.Ordinal)
+               && content.Contains("document.body", StringComparison.Ordinal)
+               && !content.Contains("setTimeout", StringComparison.Ordinal);
+    }
+
+    [GeneratedRegex(@"new\s+MutationObserver\s*\(\s*\([^)]*\)\s*=>\s*\{?\s*(?:applyLanguage|translatePage|i18nApply)\s*\(", RegexOptions.None)]
+    private static partial Regex ImmediateTranslateObserver();
 
     /// <summary>True when file body still contains JSON unicode escapes instead of real characters.</summary>
     private static bool LooksJsonEscaped(string content) =>

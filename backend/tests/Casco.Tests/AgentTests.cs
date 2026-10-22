@@ -301,6 +301,37 @@ public class AgentTests
     }
 
     [Fact]
+    public void Undebounced_language_MutationObserver_blocks_completion()
+    {
+        var frozen = """
+            function applyLanguage() {
+              const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+              let node;
+              while ((node = walker.nextNode())) { node.nodeValue = node.nodeValue; }
+            }
+            new MutationObserver(() => applyLanguage()).observe(document.body, { childList: true, subtree: true });
+            """;
+        var safe = """
+            function applyLanguage() {
+              const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+              let node;
+              while ((node = walker.nextNode())) { node.nodeValue = node.nodeValue; }
+            }
+            let timer = 0;
+            new MutationObserver(() => {
+              clearTimeout(timer);
+              timer = setTimeout(() => applyLanguage(), 80);
+            }).observe(document.body, { childList: true, subtree: true });
+            """;
+        Assert.Contains(
+            SiteValidator.Validate(new Dictionary<string, string> { ["index.html"] = "<html></html>", ["assets/app.js"] = frozen }, false),
+            e => e.Error.Contains("MutationObserver") || e.Error.Contains("freezes"));
+        Assert.DoesNotContain(
+            SiteValidator.Validate(new Dictionary<string, string> { ["index.html"] = "<html></html>", ["assets/app.js"] = safe }, false),
+            e => e.Error.Contains("MutationObserver") || e.Error.Contains("freezes"));
+    }
+
+    [Fact]
     public void Htm_empty_fragment_blocks_completion()
     {
         var broken = """
