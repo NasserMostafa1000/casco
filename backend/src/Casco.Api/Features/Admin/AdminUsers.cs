@@ -127,7 +127,7 @@ public static class AdminUsers
         });
 
         g.MapGet("/users/{id:guid}", async (Guid id, AppDbContext db, HostingService hosting, TokenService tokens,
-            IOptions<AppOptions> appOpt, TemplateCatalog templates) =>
+            IOptions<AppOptions> appOpt, TemplateCatalog templates, OwnerEarningsService earnings) =>
         {
             var user = await db.Users.Include(u => u.Subscription).AsNoTracking().FirstOrDefaultAsync(u => u.Id == id)
                        ?? throw ApiException.NotFound("المستخدم غير موجود");
@@ -187,12 +187,13 @@ public static class AdminUsers
                     amount = p.AmountMinor / 100m, p.Currency, p.Provider, p.Status, p.IsTest, p.CreatedAt, p.CompletedAt
                 }).ToList();
             var real = payments.Where(p => p.Status == PaymentStatuses.Completed && !p.IsTest).ToList();
+            var earningRows = await db.OwnerEarningEntries.AsNoTracking().Where(e => e.UserId == id).ToListAsync();
 
             return Results.Ok(new
             {
                 user = new
                 {
-                    user.Id, user.Email, user.Name, user.Role, user.CreatedAt, user.FreeSiteUsed,
+                    user.Id, user.Email, user.Name, user.Role, user.CreatedAt, user.FreeSiteUsed, user.AdminNote,
                     password = user.PasswordHash != "", google = user.GoogleId != null, apple = user.AppleId != null
                 },
                 plan = new
@@ -210,6 +211,7 @@ public static class AdminUsers
                     creditsUsed = -(await db.CreditEntries.Where(e => e.UserId == id && e.Type == CreditEntryTypes.Usage).SumAsync(e => (int?)e.Amount) ?? 0),
                     tasks = await db.AgentTasks.CountAsync(t => t.UserId == id)
                 },
+                earnings = earnings.BuildSummary(earningRows),
                 sites,
                 payments
             });

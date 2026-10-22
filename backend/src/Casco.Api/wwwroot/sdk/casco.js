@@ -250,7 +250,12 @@
     categories: function () { return request("GET", "/store/categories"); },
     checkout: function (customer) {
       var items = readCart().map(function (i) { return { productId: i.productId, quantity: i.quantity }; });
-      return request("POST", "/store/orders", Object.assign({}, customer, { items: items })).then(function (order) {
+      var payload = Object.assign({ returnUrl: (typeof location !== "undefined" ? location.href.split("#")[0] : "") }, customer, { items: items });
+      return request("POST", "/store/orders", payload).then(function (order) {
+        if (order && order.redirectUrl) {
+          if (typeof location !== "undefined") location.href = order.redirectUrl;
+          return order;
+        }
         cart.clear();
         return order;
       });
@@ -294,6 +299,9 @@
     var count = cart.count();
     document.querySelectorAll("[data-casco-cart-count]").forEach(function (el) { el.textContent = count; });
   }
+  try {
+    if (typeof location !== "undefined" && /[?&]casco_paid=/.test(location.search || "")) cart.clear();
+  } catch (e) { }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", autoBind);
   else autoBind();
   // React pages render after this script. Bind forms and cart badges when they appear.

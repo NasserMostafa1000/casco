@@ -485,15 +485,15 @@ Courses, lessons, ads, products, booking services and collection records are man
 All SDK calls return Promises and reject with Error(message in Arabic) + err.status; show err.message with Casco.util.toast(err.message,'error'). Always render a loading state and an empty state.
 
 ## Store (any shop: clothes, food, perfumes, electronics, restaurant menu with ordering…)
-Casco.store.config() -> {currency, shippingFee, freeShippingOver, paymentMethods:[{id,label}], bankDetails, hasWhatsApp, onlinePayment:false}
+Casco.store.config() -> {currency, shippingFee, freeShippingOver, paymentMethods:[{id,label}], bankDetails, hasWhatsApp, onlinePayment:boolean}
 Casco.store.products({category,q,sort:'price'|'-price'|'newest',page,pageSize}) -> {items:[{id,name,description,price,comparePrice,category,images,image,inStock,stock}],total,page,pageSize,currency}
 Casco.store.product(id); Casco.store.categories() -> {items:[{name,count}]}
 Cart (saved in the browser): Casco.cart.add(product, qty); Casco.cart.items() -> [{productId,name,price,image,quantity}]; Casco.cart.setQuantity(productId, qty); Casco.cart.remove(productId); Casco.cart.clear(); Casco.cart.count(); Casco.cart.subtotal()
 Any element with data-casco-cart-count shows the cart count automatically; window 'casco:cart' event fires on every change (event.detail = {items,count,subtotal}).
-Casco.store.checkout({customerName, phone, email?, address?, city?, notes?, paymentMethod}) -> sends the cart, clears it, returns {id, number, subtotal, shippingFee, total, currency, status, paymentLabel, bankDetails, whatsappUrl}. Address is required for 'cod'. Prices are always recomputed on the server.
-After checkout show a thank-you view with the order number; if whatsappUrl is not empty show a "أرسل الطلب على واتساب" button linking to it (target=_blank); show bankDetails when present.
+Casco.store.checkout({customerName, phone, email?, address?, city?, notes?, paymentMethod}) -> sends the cart; for offline methods clears the cart and returns {id, number, subtotal, shippingFee, total, currency, status, paymentLabel, bankDetails, whatsappUrl}. Address is required for 'cod'. When paymentMethod is 'online' (only if config.onlinePayment is true), returns {redirectUrl, paymentStatus:'pending', ...} and the SDK redirects the visitor to Casco card checkout (Ziina) — never build your own card form, never collect card numbers. Prices are always recomputed on the server.
+After offline checkout show a thank-you view with the order number; if whatsappUrl is not empty show a "أرسل الطلب على واتساب" button linking to it (target=_blank); show bankDetails when present. After online return, URL may include casco_paid / casco_canceled / casco_failed — show thank-you or retry accordingly.
 Casco.store.order(id, phone) -> order tracking; Casco.store.myOrders() (logged-in members).
-ONLINE CARD PAYMENT IS NOT AVAILABLE (no Visa/Mastercard/Apple Pay/Stripe/PayPal forms, never collect card numbers). Use the store payment methods (cash on delivery, WhatsApp, bank transfer, pickup). If the user asks for online payment, build the site with these methods and say in the summary (in their language): online payment needs a company license, a bank account in the same name as the license, and a developer to make sure payments go through safely — Casco technical support can do it on WhatsApp +971569166263.
+Payment methods: use whatever config.paymentMethods returns (cod, whatsapp, transfer, pickup, and online when available). NEVER invent Visa/Mastercard/Stripe/PayPal forms. If onlinePayment is false and the owner asks for cards, tell them (in their language) to enable "الدفع الإلكتروني" in Casco site settings (needs backend hosting); Casco support WhatsApp +971569166263.
 
 ## Bookings (clinics, salons, consultants, gyms, courts, restaurants tables…)
 Casco.bookings.services() -> {items:[{id,name,description,durationMinutes,price}], currency, timeZone, daysAhead}

@@ -192,6 +192,7 @@ builder.Services.AddScoped<SubscriptionService>();
 builder.Services.AddSingleton<WalletProofStore>();
 builder.Services.AddScoped<WalletTransferService>();
 builder.Services.AddScoped<PaymentFulfillment>();
+builder.Services.AddScoped<OwnerEarningsService>();
 builder.Services.AddScoped<AiClient>();
 builder.Services.AddScoped<ProjectService>();
 builder.Services.AddScoped<PublishService>();
@@ -270,6 +271,29 @@ using (var scope = app.Services.CreateScope())
         await db.Database.ExecuteSqlRawAsync("""CREATE UNIQUE INDEX IF NOT EXISTS "IX_DesktopLogins_UserCode" ON "DesktopLogins" ("UserCode");""");
         await db.Database.ExecuteSqlRawAsync("""CREATE UNIQUE INDEX IF NOT EXISTS "IX_DesktopLogins_DeviceCodeHash" ON "DesktopLogins" ("DeviceCodeHash");""");
         await db.Database.ExecuteSqlRawAsync("""CREATE INDEX IF NOT EXISTS "IX_DesktopLogins_ExpiresAt" ON "DesktopLogins" ("ExpiresAt");""");
+        await db.Database.ExecuteSqlRawAsync("""
+            CREATE TABLE IF NOT EXISTS "OwnerEarningEntries" (
+                "Id" TEXT NOT NULL CONSTRAINT "PK_OwnerEarningEntries" PRIMARY KEY,
+                "UserId" TEXT NOT NULL,
+                "ProjectId" TEXT NULL,
+                "OrderId" TEXT NULL,
+                "PaymentId" TEXT NULL,
+                "GrossMinor" INTEGER NOT NULL,
+                "FeeMinor" INTEGER NOT NULL,
+                "NetMinor" INTEGER NOT NULL,
+                "Currency" TEXT NOT NULL,
+                "Type" TEXT NOT NULL,
+                "Note" TEXT NULL,
+                "CreatedAt" TEXT NOT NULL
+            );
+            """);
+        await db.Database.ExecuteSqlRawAsync("""CREATE INDEX IF NOT EXISTS "IX_OwnerEarningEntries_UserId" ON "OwnerEarningEntries" ("UserId");""");
+        await db.Database.ExecuteSqlRawAsync("""CREATE INDEX IF NOT EXISTS "IX_OwnerEarningEntries_PaymentId" ON "OwnerEarningEntries" ("PaymentId");""");
+        await db.Database.ExecuteSqlRawAsync("""CREATE INDEX IF NOT EXISTS "IX_OwnerEarningEntries_CreatedAt" ON "OwnerEarningEntries" ("CreatedAt");""");
+        try { await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "Users" ADD COLUMN "AdminNote" TEXT NULL;"""); } catch { /* already there */ }
+        try { await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "Payments" ADD COLUMN "OrderId" TEXT NULL;"""); } catch { /* already there */ }
+        try { await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "Orders" ADD COLUMN "PaymentStatus" TEXT NOT NULL DEFAULT 'paid';"""); } catch { /* already there */ }
+        try { await db.Database.ExecuteSqlRawAsync("""ALTER TABLE "Orders" ADD COLUMN "ProviderPaymentId" TEXT NULL;"""); } catch { /* already there */ }
     }
 }
 await app.Services.GetRequiredService<PricingService>().LoadAsync();

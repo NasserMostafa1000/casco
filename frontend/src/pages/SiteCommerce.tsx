@@ -7,7 +7,10 @@ import { t } from '../lib/i18n'
 function useData<T>(url: string) {
   const [data, setData] = useState<T | null>(null)
   const [error, setError] = useState('')
-  const reload = useCallback(() => get<T>(url).then(setData).catch((e) => setError(errorMessage(e))), [url])
+  const reload = useCallback(() => {
+    if (!url) return Promise.resolve()
+    return get<T>(url).then(setData).catch((e) => setError(errorMessage(e)))
+  }, [url])
   useEffect(() => {
     void reload()
   }, [reload])
@@ -103,7 +106,7 @@ export function Store({ projectId }: { projectId: string }) {
 function OnlinePaymentNote() {
   return (
     <Alert tone="info">
-      {t('المتجر يستقبل الطلبات بالدفع عند الاستلام أو عبر واتساب أو التحويل البنكي أو الاستلام من المحل (تختارها من الإعدادات). الدفع الإلكتروني بالبطاقات يحتاج رخصة شركة وحساب بنكي بنفس اسم الرخصة، ومبرمج للتأكد من أن عمليات الدفع تتم بأمان — تواصل مع الدعم الفني لـ Casco على واتساب')}{' '}
+      {t('المتجر يقبل الدفع عند الاستلام وواتساب والتحويل والاستلام من المحل. للدفع بالبطاقة فعّل «الدفع الإلكتروني» من إعدادات الموقع (يحتاج استضافة باك إند) — تُخصم عمولة كاسكو وتُضاف باقي المبيعات لرصيدك.')}{' '}
       <a href={supportWhatsAppUrl()} target="_blank" rel="noreferrer" className="font-bold underline" dir="ltr">
         {SUPPORT_WHATSAPP}
       </a>
@@ -648,6 +651,7 @@ interface SiteSettings {
   freeShippingOver: number
   paymentMethods: string[]
   bankDetails: string | null
+  onlinePaymentEnabled?: boolean
   booking: {
     timeZone: string
     slotMinutes: number
@@ -662,6 +666,24 @@ interface SiteSettings {
 interface SettingsResponse {
   settings: SiteSettings
   paymentMethods: { id: string; label: string }[]
+  onlinePayment?: {
+    available: boolean
+    enabled: boolean
+    feePercent: number
+    message: string
+    supportWhatsApp: string
+  }
+}
+interface EarningsResponse {
+  summary: {
+    currency: string
+    feePercent: number
+    available: number
+    grossSales: number
+    fees: number
+    netSales: number
+    paidOut: number
+  }
 }
 function dayNameList() {
   return [t('الأحد'), t('الإثنين'), t('الثلاثاء'), t('الأربعاء'), t('الخميس'), t('الجمعة'), t('السبت')]
@@ -672,10 +694,12 @@ const paymentMethodNames: Record<string, string> = {
   whatsapp: 'الاتفاق على الدفع عبر واتساب',
   transfer: 'تحويل بنكي',
   pickup: 'الدفع والاستلام من المحل',
+  online: 'دفع إلكتروني بالبطاقة',
 }
 
 export function SiteSettingsForm({ projectId, showStore, showBookings }: { projectId: string; showStore: boolean; showBookings: boolean }) {
   const { data, error } = useData<SettingsResponse>(`/api/projects/${projectId}/data/settings`)
+  const { data: earnings } = useData<EarningsResponse>(showStore ? `/api/projects/${projectId}/data/earnings` : '')
   const [s, setS] = useState<SiteSettings | null>(null)
   const [msg, setMsg] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
   const [saving, setSaving] = useState(false)
@@ -687,6 +711,7 @@ export function SiteSettingsForm({ projectId, showStore, showBookings }: { proje
   const setB = (patchB: Partial<SiteSettings['booking']>) => setS({ ...s, booking: { ...s.booking, ...patchB } })
   const dayNames = dayNameList()
   const setDay = (day: number, patchD: Partial<WorkingDay>) => setB({ week: s.booking.week.map((w) => (w.day === day ? { ...w, ...patchD } : w)) })
+  const online = data.onlinePayment
 
   const save = async () => {
     setSaving(true)
@@ -722,7 +747,7 @@ export function SiteSettingsForm({ projectId, showStore, showBookings }: { proje
           <div>
             <span className="mb-1 block text-sm font-medium text-slate-700">{t('طرق الدفع المتاحة')}</span>
             <div className="flex flex-wrap gap-4">
-              {data.paymentMethods.map((m) => (
+              {data.paymentMethods.filter((m) => m.id !== 'online').map((m) => (
                 <label key={m.id} className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
@@ -737,7 +762,27 @@ export function SiteSettingsForm({ projectId, showStore, showBookings }: { proje
           {s.paymentMethods.includes('transfer') && (
             <Textarea label={t('بيانات التحويل البنكي (تظهر للعميل بعد الطلب)')} rows={3} value={s.bankDetails ?? ''} onChange={(e) => setS({ ...s, bankDetails: e.target.value })} />
           )}
-          <OnlinePaymentNote />
+          <div className="rounded-xl border border-slate-200 p-3 space-y-2">
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <input
+                type="checkbox"
+                disabled={!online?.available}
+                checked={!!s.onlinePaymentEnabled && !!online?.available}
+                onChange={(e) => setS({ ...s, onlinePaymentEnabled: e.target.checked })}
+              />
+              {t('تفعيل الدفع الإلكتروني بالبطاقة (زينة كاسكو)')}
+            </label>
+            <p className="text-xs text-slate-500">{online?.message}</p>
+            {earnings?.summary && (
+              <p className="text-sm" dir="ltr">
+                {t('رصيدك من المبيعات')}: <b>{earnings.summary.available.toFixed(2)} {earnings.summary.currency}</b>
+                {' · '}
+                {t('صافي المبيعات')}: {earnings.summary.netSales.toFixed(2)} {earnings.summary.currency}
+                {' · '}
+                {t('عمولة كاسكو')}: {earnings.summary.fees.toFixed(2)} ({earnings.summary.feePercent}%)
+              </p>
+            )}
+          </div>
         </>
       )}
 

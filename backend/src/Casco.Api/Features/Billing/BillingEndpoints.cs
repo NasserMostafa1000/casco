@@ -1,6 +1,9 @@
 using System.Text.Json;
 using Casco.Api.Domain;
+using Casco.Api.Features.Backend;
+using Casco.Api.Features.Commerce;
 using Casco.Api.Features.Notifications;
+using Casco.Api.Features.SiteRuntime;
 using Casco.Api.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -12,7 +15,7 @@ public record CheckoutRequest(string Kind, string? Interval, string? PackId, Gui
 public record GrantHostingRequest(string Tier, int Months, decimal? Amount = null);
 
 public class PaymentFulfillment(AppDbContext db, SubscriptionService subscriptions, CreditService credits, HostingService hosting,
-    UserEmails emails, TikTokEvents tiktok, ILogger<PaymentFulfillment> logger)
+    OwnerEarningsService earnings, SiteNotifier notifier, UserEmails emails, TikTokEvents tiktok, ILogger<PaymentFulfillment> logger)
 {
     /// <summary>Idempotent: only a pending payment can be completed, and only once.</summary>
     public async Task<Payment> ApplyStatusAsync(Payment payment, string providerStatus, BillingOptions billing)
@@ -48,6 +51,12 @@ public class PaymentFulfillment(AppDbContext db, SubscriptionService subscriptio
                     if (amount is > 0)
                         await credits.GrantAsync(payment.UserId, amount.Value, CreditBuckets.Topup, CreditEntryTypes.Topup, payment.Id.ToString());
                 }
+                else if (payment.Kind == PaymentKinds.Store && payment.OrderId is { } orderId)
+                {
+                    await FulfillStoreAsync(payment, orderId);
+                    logger.LogInformation("Payment {PaymentId} completed ({Kind})", payment.Id, payment.Kind);
+                    break;
+                }
                 logger.LogInformation("Payment {PaymentId} completed ({Kind})", payment.Id, payment.Kind);
                 await emails.PaymentReceiptAsync(payment);
                 var buyer = await db.Users.Where(u => u.Id == payment.UserId).Select(u => u.Email).FirstOrDefaultAsync();
@@ -56,13 +65,64 @@ public class PaymentFulfillment(AppDbContext db, SubscriptionService subscriptio
             case "failed":
                 payment.Status = PaymentStatuses.Failed;
                 await db.SaveChangesAsync();
+                if (payment.Kind == PaymentKinds.Store && payment.OrderId is { } failedOrder)
+                    await CancelStoreOrderAsync(failedOrder, OrderPaymentStatuses.Failed);
                 break;
             case "canceled":
                 payment.Status = PaymentStatuses.Canceled;
                 await db.SaveChangesAsync();
+                if (payment.Kind == PaymentKinds.Store && payment.OrderId is { } canceledOrder)
+                    await CancelStoreOrderAsync(canceledOrder, OrderPaymentStatuses.Cancelled);
                 break;
         }
         return payment;
+    }
+
+    private async Task FulfillStoreAsync(Payment payment, Guid orderId)
+    {
+        var order = await db.Orders.FirstOrDefaultAsync(o => o.Id == orderId);
+        if (order is null) return;
+        if (order.PaymentStatus == OrderPaymentStatuses.Paid) return;
+        order.PaymentStatus = OrderPaymentStatuses.Paid;
+        order.ProviderPaymentId = payment.ProviderPaymentId;
+        if (order.Status == OrderStatuses.Canceled) order.Status = OrderStatuses.New;
+        await db.SaveChangesAsync();
+        await earnings.CreditSaleAsync(payment, order);
+
+        var project = await db.Projects.AsNoTracking().FirstOrDefaultAsync(p => p.Id == order.ProjectId);
+        if (project is null) return;
+        var site = new SiteRef(project.Id, project.UserId, project.SiteKey, project.AdsRequireApproval, project.CurrentVersionId,
+            project.PublishedVersionId, project.PublishedAt != null, project.HostingTier, project.HostingPaidUntil, project.SettingsJson,
+            project.IsAdminSuspended, project.HostingTrial);
+        var items = System.Text.Json.JsonSerializer.Deserialize<List<OrderLine>>(order.ItemsJson, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)) ?? [];
+        notifier.Notify(site, SiteEventKind.Order, StoreEndpoints.OrderSummary(order, items), order.Number);
+    }
+
+    private async Task CancelStoreOrderAsync(Guid orderId, string paymentStatus)
+    {
+        var order = await db.Orders.FirstOrDefaultAsync(o => o.Id == orderId);
+        if (order is null || order.PaymentStatus == OrderPaymentStatuses.Paid) return;
+        if (order.Status == OrderStatuses.Canceled && order.PaymentStatus == paymentStatus) return;
+
+        var projectGate = RecordStore.LockFor(order.ProjectId);
+        await projectGate.WaitAsync();
+        try
+        {
+            await db.Entry(order).ReloadAsync();
+            if (order.PaymentStatus == OrderPaymentStatuses.Paid) return;
+            if (order.Status != OrderStatuses.Canceled)
+            {
+                var lines = JsonSerializer.Deserialize<List<OrderLine>>(order.ItemsJson, new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? [];
+                var ids = lines.Select(l => l.ProductId).ToList();
+                var products = await db.Products.Where(p => p.ProjectId == order.ProjectId && ids.Contains(p.Id) && p.Stock != null).ToListAsync();
+                foreach (var p in products)
+                    p.Stock = Math.Max(0, p.Stock!.Value + lines.Where(l => l.ProductId == p.Id).Sum(l => l.Quantity));
+                order.Status = OrderStatuses.Canceled;
+            }
+            order.PaymentStatus = paymentStatus;
+            await db.SaveChangesAsync();
+        }
+        finally { projectGate.Release(); }
     }
 }
 

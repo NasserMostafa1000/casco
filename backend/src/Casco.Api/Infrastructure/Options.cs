@@ -55,6 +55,8 @@ public class BillingOptions
     public HostingOptions Hosting { get; set; } = new();
     public List<TopupPack> TopupPacks { get; set; } = [];
     public EconomicsOptions Economics { get; set; } = new();
+    /// <summary>Platform fee taken from each successful store sale paid via Casco Ziina (percent of gross).</summary>
+    public decimal MarketplaceFeePercent { get; set; } = 5;
 
     public static string Dollars(int minor) => $"${minor / 100m:0.##}";
 }

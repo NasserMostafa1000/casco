@@ -114,6 +114,7 @@ public static class AdminEndpoints
         });
 
         g.MapAdminUserEndpoints();
+        g.MapOwnerEarningsAdmin();
 
         g.MapGet("/pricing", (PricingService pricing) => Results.Ok(new { current = pricing.Current, defaults = pricing.Defaults, updatedAt = pricing.UpdatedAt }));
 

@@ -1,9 +1,11 @@
 using System.Text.Json;
 using Casco.Api.Domain;
+using Casco.Api.Features.Billing;
 using Casco.Api.Features.Projects;
 using Casco.Api.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Options;
 
 namespace Casco.Api.Features.SiteRuntime;
 
@@ -196,20 +198,49 @@ public static class SiteDataEndpoints
             return Results.NoContent();
         });
 
-        g.MapGet("/settings", async (Guid id, HttpContext http, ProjectService projects) =>
+        g.MapGet("/settings", async (Guid id, HttpContext http, ProjectService projects, HostingService hosting,
+            ZiinaClient ziina, IOptions<BillingOptions> billing) =>
         {
             var project = await projects.GetOwnedAsync(id, http.User.UserId());
+            var backendActive = hosting.IsActive(project, HostingTiers.Backend);
+            var available = backendActive && ziina.IsConfigured;
+            var settings = SiteSettings.Parse(project.SettingsJson);
             return Results.Ok(new
             {
                 adsRequireApproval = project.AdsRequireApproval,
-                settings = SiteSettings.Parse(project.SettingsJson),
-                paymentMethods = PaymentMethods.All.Select(m => new { id = m, label = Commerce.StoreEndpoints.PaymentLabel(m) }),
+                settings,
+                paymentMethods = PaymentMethods.Offline.Select(m => new { id = m, label = Commerce.StoreEndpoints.PaymentLabel(m) })
+                    .Concat(available ? [new { id = PaymentMethods.Online, label = Commerce.StoreEndpoints.PaymentLabel(PaymentMethods.Online) }] : []),
                 onlinePayment = new
                 {
-                    available = false,
-                    message = "الدفع الإلكتروني بالبطاقات يحتاج رخصة شركة وحساب بنكي بنفس اسم الرخصة، ومبرمج للتأكد من أن عمليات الدفع تتم بأمان. تواصل مع الدعم الفني لـ Casco لتفعيله لموقعك.",
+                    available,
+                    enabled = settings.OnlinePaymentEnabled && available,
+                    feePercent = billing.Value.MarketplaceFeePercent,
+                    message = available
+                        ? $"فعّل الدفع بالبطاقة عبر زينة كاسكو. تُخصم عمولة {billing.Value.MarketplaceFeePercent:0.##}% وتُضاف باقي المبيعات لرصيدك في لوحة كاسكو (يُصرف يدوياً)."
+                        : backendActive
+                            ? "بوابة الدفع غير مهيأة حالياً. تواصل مع دعم كاسكو."
+                            : "الدفع الإلكتروني يحتاج استضافة الباك إند فعّالة. فعّلها ثم أعد المحاولة.",
                     supportWhatsApp = SupportWhatsApp
                 }
+            });
+        });
+
+        g.MapGet("/earnings", async (Guid id, HttpContext http, ProjectService projects, OwnerEarningsService earnings, AppDbContext db) =>
+        {
+            var project = await projects.GetOwnedAsync(id, http.User.UserId());
+            var rows = await db.OwnerEarningEntries.AsNoTracking()
+                .Where(e => e.UserId == project.UserId && (e.ProjectId == null || e.ProjectId == id))
+                .OrderByDescending(e => e.CreatedAt).Take(50).ToListAsync();
+            var all = await db.OwnerEarningEntries.AsNoTracking().Where(e => e.UserId == project.UserId).ToListAsync();
+            return Results.Ok(new
+            {
+                summary = earnings.BuildSummary(all),
+                recent = rows.Select(e => new
+                {
+                    e.Id, e.Type, e.ProjectId, e.OrderId, gross = e.GrossMinor / 100m, fee = e.FeeMinor / 100m,
+                    net = e.NetMinor / 100m, e.Currency, e.Note, e.CreatedAt
+                })
             });
         });
 

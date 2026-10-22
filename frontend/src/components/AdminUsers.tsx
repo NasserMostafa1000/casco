@@ -84,11 +84,24 @@ interface AdminPayment {
   completedAt: string | null
 }
 
+interface EarningsSummary {
+  currency: string
+  feePercent: number
+  available: number
+  grossSales: number
+  fees: number
+  netSales: number
+  paidOut: number
+  adjustments: number
+  salesCount: number
+}
+
 interface UserDetail {
-  user: { id: string; email: string; name: string; role: string; createdAt: string; freeSiteUsed: boolean; password: boolean; google: boolean; apple: boolean }
+  user: { id: string; email: string; name: string; role: string; createdAt: string; freeSiteUsed: boolean; password: boolean; google: boolean; apple: boolean; adminNote?: string | null }
   plan: { plan: string; interval: string | null; periodEnd: string | null }
   credits: number
   totals: { paid: number; payments: number; aiCost: number; creditsUsed: number; tasks: number }
+  earnings?: EarningsSummary
   sites: AdminSite[]
   payments: AdminPayment[]
 }
@@ -113,7 +126,7 @@ const sorts: { key: string; label: string }[] = [
   { key: 'cost', label: 'الأعلى تكلفة AI' },
 ]
 
-const paymentKinds: Record<string, string> = { subscription: 'اشتراك Pro', hosting: 'استضافة', topup: 'شحن نقاط' }
+const paymentKinds: Record<string, string> = { subscription: 'اشتراك Pro', hosting: 'استضافة', topup: 'شحن نقاط', store: 'مبيعات متجر' }
 const paymentStatuses: Record<string, { label: string; color: 'green' | 'amber' | 'red' | 'slate' }> = {
   completed: { label: 'مكتمل', color: 'green' },
   pending: { label: 'لم يكتمل', color: 'amber' },
@@ -356,6 +369,20 @@ function UserView({ id, onBack }: { id: string; onBack: () => void }) {
         <Mini label="تكلفة AI عليك" value={`$${totals.aiCost.toFixed(4)}`} sub={`${totals.tasks} طلب`} />
         <Mini label="المواقع" value={data.sites.length} sub={`${data.sites.filter((s) => s.publishedAt).length} منشور`} />
       </div>
+
+      {data.earnings && (
+        <Card className="space-y-2">
+          <h3 className="font-bold">أرباح المتاجر (زينة كاسكو)</h3>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 text-sm">
+            <Mini label="رصيد متاح" value={`${data.earnings.available.toFixed(2)} ${data.earnings.currency}`} />
+            <Mini label="إجمالي المبيعات" value={`${data.earnings.grossSales.toFixed(2)} ${data.earnings.currency}`} sub={`${data.earnings.salesCount} عملية`} />
+            <Mini label={`عمولة كاسكو (${data.earnings.feePercent}%)`} value={`${data.earnings.fees.toFixed(2)} ${data.earnings.currency}`} />
+            <Mini label="صُرف له" value={`${data.earnings.paidOut.toFixed(2)} ${data.earnings.currency}`} />
+          </div>
+          {user.adminNote && <p className="text-xs text-slate-500">ملاحظة أدمن: {user.adminNote}</p>}
+          <p className="text-xs text-slate-400">للصرف أو تعديل الرصيد استخدم تبويب الحسابات.</p>
+        </Card>
+      )}
 
       <div>
         <h3 className="text-lg font-bold">مواقعه</h3>

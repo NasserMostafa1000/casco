@@ -79,6 +79,25 @@ public static class PaymentKinds
     public const string Subscription = "subscription";
     public const string Topup = "topup";
     public const string Hosting = "hosting";
+    /// <summary>Visitor card payment for a site store order (Casco Ziina → owner earnings ledger).</summary>
+    public const string Store = "store";
+}
+
+public static class OrderPaymentStatuses
+{
+    public const string Pending = "pending";
+    public const string Paid = "paid";
+    public const string Failed = "failed";
+    public const string Cancelled = "cancelled";
+}
+
+public static class OwnerEarningTypes
+{
+    public const string Sale = "sale";
+    public const string Payout = "payout";
+    public const string Adjustment = "adjustment";
+
+    public static readonly string[] All = [Sale, Payout, Adjustment];
 }
 
 public static class OrderStatuses
@@ -174,6 +193,8 @@ public class User
     public Guid? ReferredByUserId { get; set; }
     /// <summary>True after 10 invited accounts were verified and the extra prompts were granted.</summary>
     public bool ShareRewardClaimed { get; set; }
+    /// <summary>Short admin-only note shown on the accounts / user screens.</summary>
+    public string? AdminNote { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public Subscription? Subscription { get; set; }
 }
@@ -276,8 +297,10 @@ public class Payment
     public string? TopupPackId { get; set; }
     /// <summary>Credits the pack gave at checkout, so later price edits or a deleted pack don't change what was bought.</summary>
     public int? TopupCredits { get; set; }
-    /// <summary>Site whose hosting this payment renews (Kind = hosting).</summary>
+    /// <summary>Site whose hosting this payment renews (Kind = hosting), or store order project (Kind = store).</summary>
     public Guid? ProjectId { get; set; }
+    /// <summary>Store order paid by this payment (Kind = store).</summary>
+    public Guid? OrderId { get; set; }
     public string? HostingTier { get; set; }
     public int AmountMinor { get; set; }
     public string Currency { get; set; } = "USD";
@@ -287,6 +310,24 @@ public class Payment
     public bool IsTest { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? CompletedAt { get; set; }
+}
+
+/// <summary>Marketplace earnings for a site owner: store sales (net of Casco fee), payouts, and adjustments.</summary>
+public class OwnerEarningEntry
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid UserId { get; set; }
+    public Guid? ProjectId { get; set; }
+    public Guid? OrderId { get; set; }
+    public Guid? PaymentId { get; set; }
+    public int GrossMinor { get; set; }
+    public int FeeMinor { get; set; }
+    public int NetMinor { get; set; }
+    public string Currency { get; set; } = "AED";
+    /// <summary>sale | payout | adjustment</summary>
+    public string Type { get; set; } = OwnerEarningTypes.Sale;
+    public string? Note { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
 /// <summary>A Vodafone Cash or InstaPay transfer waiting for an admin to approve the screenshot.</summary>
@@ -615,6 +656,9 @@ public class Order
     public decimal Total { get; set; }
     public string Currency { get; set; } = "AED";
     public string PaymentMethod { get; set; } = "cod";
+    /// <summary>pending | paid | failed | cancelled. Non-online methods are treated as paid at placement.</summary>
+    public string PaymentStatus { get; set; } = OrderPaymentStatuses.Paid;
+    public string? ProviderPaymentId { get; set; }
     public string Status { get; set; } = OrderStatuses.New;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

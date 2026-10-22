@@ -11,6 +11,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<CreditEntry> CreditEntries => Set<CreditEntry>();
     public DbSet<CreditReservation> CreditReservations => Set<CreditReservation>();
     public DbSet<Payment> Payments => Set<Payment>();
+    public DbSet<OwnerEarningEntry> OwnerEarningEntries => Set<OwnerEarningEntry>();
     public DbSet<WalletTransfer> WalletTransfers => Set<WalletTransfer>();
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<ProjectVersion> ProjectVersions => Set<ProjectVersion>();
@@ -61,6 +62,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.Role).HasMaxLength(20);
             e.Property(x => x.Locale).HasMaxLength(5).HasDefaultValue("ar");
             e.Property(x => x.ReferralCode).HasMaxLength(12);
+            e.Property(x => x.AdminNote).HasMaxLength(500);
             e.HasIndex(x => x.ReferralCode).IsUnique();
             e.HasIndex(x => x.ReferredByUserId);
             e.HasOne(x => x.Subscription).WithOne().HasForeignKey<Subscription>(x => x.UserId);
@@ -94,9 +96,20 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             e.HasIndex(x => x.UserId);
             e.HasIndex(x => x.ProviderPaymentId);
+            e.HasIndex(x => x.OrderId);
             e.Property(x => x.Kind).HasMaxLength(20);
             e.Property(x => x.Status).HasMaxLength(20);
             e.Property(x => x.Currency).HasMaxLength(3);
+        });
+
+        b.Entity<OwnerEarningEntry>(e =>
+        {
+            e.HasIndex(x => x.UserId);
+            e.HasIndex(x => x.PaymentId);
+            e.HasIndex(x => x.CreatedAt);
+            e.Property(x => x.Currency).HasMaxLength(3);
+            e.Property(x => x.Type).HasMaxLength(20);
+            e.Property(x => x.Note).HasMaxLength(500);
         });
 
         b.Entity<DesktopMachine>(e =>
@@ -238,6 +251,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.Currency).HasMaxLength(3);
             e.Property(x => x.Status).HasMaxLength(20);
             e.Property(x => x.PaymentMethod).HasMaxLength(20);
+            e.Property(x => x.PaymentStatus).HasMaxLength(20);
+            e.Property(x => x.ProviderPaymentId).HasMaxLength(80);
         });
 
         b.Entity<BookingService>(e =>

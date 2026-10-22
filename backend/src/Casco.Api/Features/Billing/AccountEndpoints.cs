@@ -55,6 +55,22 @@ public static class AccountEndpoints
             });
         }).RequireAuthorization();
 
+        app.MapGet("/api/me/earnings", async (HttpContext http, AppDbContext db, OwnerEarningsService earnings) =>
+        {
+            var userId = http.User.UserId();
+            var rows = await db.OwnerEarningEntries.AsNoTracking().Where(e => e.UserId == userId)
+                .OrderByDescending(e => e.CreatedAt).Take(50).ToListAsync();
+            return Results.Ok(new
+            {
+                summary = earnings.BuildSummary(rows),
+                recent = rows.Select(e => new
+                {
+                    e.Id, e.Type, e.ProjectId, e.OrderId, gross = e.GrossMinor / 100m, fee = e.FeeMinor / 100m,
+                    net = e.NetMinor / 100m, e.Currency, e.Note, e.CreatedAt
+                })
+            });
+        }).RequireAuthorization();
+
         app.MapGet("/api/me/usage", async (HttpContext http, AppDbContext db) =>
         {
             var userId = http.User.UserId();

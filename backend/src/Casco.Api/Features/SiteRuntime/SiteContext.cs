@@ -16,8 +16,10 @@ public static class PaymentMethods
     public const string WhatsApp = "whatsapp";
     public const string BankTransfer = "transfer";
     public const string Pickup = "pickup";
+    public const string Online = "online";
 
-    public static readonly string[] All = [CashOnDelivery, WhatsApp, BankTransfer, Pickup];
+    public static readonly string[] Offline = [CashOnDelivery, WhatsApp, BankTransfer, Pickup];
+    public static readonly string[] All = [CashOnDelivery, WhatsApp, BankTransfer, Pickup, Online];
 }
 
 public class WorkingDay
@@ -56,6 +58,8 @@ public class SiteSettings
     public decimal FreeShippingOver { get; set; }
     public List<string> PaymentMethods { get; set; } = [SiteRuntime.PaymentMethods.CashOnDelivery, SiteRuntime.PaymentMethods.WhatsApp];
     public string? BankDetails { get; set; }
+    /// <summary>Owner opted in to card checkout via Casco Ziina (requires active backend hosting).</summary>
+    public bool OnlinePaymentEnabled { get; set; }
     public BookingSettings Booking { get; set; } = new();
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -80,7 +84,10 @@ public class SiteSettings
         Currency = Text.Truncate(string.IsNullOrWhiteSpace(Currency) ? "AED" : Currency.Trim().ToUpperInvariant(), 3);
         ShippingFee = Math.Clamp(ShippingFee, 0, 100000);
         FreeShippingOver = Math.Clamp(FreeShippingOver, 0, 10000000);
+        OnlinePaymentEnabled = OnlinePaymentEnabled;
         PaymentMethods = (PaymentMethods ?? []).Where(m => SiteRuntime.PaymentMethods.All.Contains(m)).Distinct().ToList();
+        if (!OnlinePaymentEnabled) PaymentMethods = PaymentMethods.Where(m => m != SiteRuntime.PaymentMethods.Online).ToList();
+        else if (!PaymentMethods.Contains(SiteRuntime.PaymentMethods.Online)) PaymentMethods.Add(SiteRuntime.PaymentMethods.Online);
         if (PaymentMethods.Count == 0) PaymentMethods = [SiteRuntime.PaymentMethods.CashOnDelivery];
         BankDetails = string.IsNullOrWhiteSpace(BankDetails) ? null : Text.Truncate(BankDetails.Trim(), 1000);
 

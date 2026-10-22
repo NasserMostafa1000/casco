@@ -3,17 +3,19 @@ using System.Text;
 using System.Text.Json;
 using Casco.Api.Domain;
 using Casco.Api.Features.Backend;
+using Casco.Api.Features.Billing;
 using Casco.Api.Features.Notifications;
 using Casco.Api.Features.Projects;
 using Casco.Api.Features.SiteRuntime;
 using Casco.Api.Infrastructure;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Casco.Api.Features.Commerce;
 
 public record OrderItemRequest(Guid ProductId, int Quantity);
 public record PlaceOrderRequest(string CustomerName, string Phone, string? Email, string? Address, string? City, string? Notes,
-    string? PaymentMethod, List<OrderItemRequest> Items, string? _hp = null);
+    string? PaymentMethod, List<OrderItemRequest> Items, string? ReturnUrl = null, string? _hp = null);
 public record ProductRequest(string Name, string? Description, decimal Price, decimal? ComparePrice, string? Category,
     List<string>? Images, int? Stock, bool IsActive = true, int SortOrder = 0);
 public record StatusRequest(string Status);
@@ -21,8 +23,7 @@ public record StatusRequest(string Status);
 public record OrderLine(Guid ProductId, string Name, decimal Price, int Quantity, string? Image);
 
 /// <summary>
-/// Online store without online payment: cash on delivery, WhatsApp, bank transfer or pickup.
-/// Card payments need a licensed business and a developer, so they are handled by Casco support, not here.
+/// Online store: COD / WhatsApp / bank / pickup, plus optional card checkout via Casco Ziina (marketplace fee).
 /// </summary>
 public static class StoreEndpoints
 {
@@ -35,25 +36,32 @@ public static class StoreEndpoints
         PaymentMethods.WhatsApp => "الاتفاق على الدفع عبر واتساب",
         PaymentMethods.BankTransfer => "تحويل بنكي",
         PaymentMethods.Pickup => "الدفع والاستلام من المحل",
+        PaymentMethods.Online => "دفع إلكتروني بالبطاقة",
         _ => method
     };
+
+    public static bool OnlineCheckoutAvailable(SiteRef project, SiteContext site, ZiinaClient ziina) =>
+        site.IsBackendActive(project) && project.Settings.OnlinePaymentEnabled && ziina.IsConfigured;
 
     public static void MapStoreEndpoints(this IEndpointRouteBuilder app)
     {
         var s = app.MapGroup("/api/s/{siteKey}/store").RequireCors("sites").RequireRateLimiting("site");
 
-        s.MapGet("/config", async (string siteKey, HttpContext http, SiteContext site) =>
+        s.MapGet("/config", async (string siteKey, HttpContext http, SiteContext site, ZiinaClient ziina, IOptions<BillingOptions> billing) =>
         {
             var project = await site.ResolveAsync(siteKey);
             site.EnsureBackend(project, http);
             var st = project.Settings;
+            var online = OnlineCheckoutAvailable(project, site, ziina);
+            var methods = st.PaymentMethods.Where(m => m != PaymentMethods.Online || online).ToList();
             return Results.Ok(new
             {
                 st.Currency, st.ShippingFee, st.FreeShippingOver,
-                paymentMethods = st.PaymentMethods.Select(m => new { id = m, label = PaymentLabel(m) }),
-                bankDetails = st.PaymentMethods.Contains(PaymentMethods.BankTransfer) ? st.BankDetails : null,
+                paymentMethods = methods.Select(m => new { id = m, label = PaymentLabel(m) }),
+                bankDetails = methods.Contains(PaymentMethods.BankTransfer) ? st.BankDetails : null,
                 hasWhatsApp = !string.IsNullOrEmpty(st.WhatsApp),
-                onlinePayment = false
+                onlinePayment = online,
+                marketplaceFeePercent = online ? billing.Value.MarketplaceFeePercent : (decimal?)null
             });
         });
 
@@ -96,7 +104,8 @@ public static class StoreEndpoints
             return Results.Ok(new { items });
         });
 
-        s.MapPost("/orders", async (string siteKey, PlaceOrderRequest req, HttpContext http, SiteContext site, SiteNotifier notifier) =>
+        s.MapPost("/orders", async (string siteKey, PlaceOrderRequest req, HttpContext http, SiteContext site, SiteNotifier notifier,
+            ZiinaClient ziina) =>
         {
             var project = await site.ResolveAsync(siteKey);
             site.EnsureBackend(project, http);
@@ -105,10 +114,14 @@ public static class StoreEndpoints
             var st = project.Settings;
             var name = RequireText(req.CustomerName, "الاسم", 120);
             var phone = RequirePhone(req.Phone);
-            var method = string.IsNullOrWhiteSpace(req.PaymentMethod) ? st.PaymentMethods[0] : req.PaymentMethod.Trim();
-            if (!st.PaymentMethods.Contains(method)) throw ApiException.BadRequest("طريقة الدفع غير متاحة في هذا المتجر");
+            var onlineOk = OnlineCheckoutAvailable(project, site, ziina);
+            var allowed = st.PaymentMethods.Where(m => m != PaymentMethods.Online || onlineOk).ToList();
+            var method = string.IsNullOrWhiteSpace(req.PaymentMethod) ? allowed[0] : req.PaymentMethod.Trim();
+            if (!allowed.Contains(method)) throw ApiException.BadRequest("طريقة الدفع غير متاحة في هذا المتجر");
             if (method == PaymentMethods.CashOnDelivery && string.IsNullOrWhiteSpace(req.Address))
                 throw ApiException.BadRequest("اكتب عنوان التوصيل");
+            if (method == PaymentMethods.Online && !onlineOk)
+                throw ApiException.BadRequest("الدفع الإلكتروني غير مفعّل لهذا المتجر");
             var lines = (req.Items ?? []).Where(i => i.Quantity > 0).GroupBy(i => i.ProductId)
                 .Select(g => (g.Key, Quantity: Math.Min(g.Sum(i => i.Quantity), 100))).ToList();
             if (lines.Count == 0) throw ApiException.BadRequest("السلة فارغة");
@@ -155,18 +168,53 @@ public static class StoreEndpoints
                     ShippingFee = shipping,
                     Total = subtotal + shipping,
                     Currency = st.Currency,
-                    PaymentMethod = method
+                    PaymentMethod = method,
+                    PaymentStatus = method == PaymentMethods.Online ? OrderPaymentStatuses.Pending : OrderPaymentStatuses.Paid
                 };
                 db.Orders.Add(order);
                 await db.SaveChangesAsync();
             }
             finally { gate.Release(); }
 
+            if (method == PaymentMethods.Online)
+            {
+                var amountMinor = OwnerEarningsService.ToMinor(order.Total);
+                if (amountMinor < 1) throw ApiException.BadRequest("مبلغ الطلب غير صالح للدفع الإلكتروني");
+                var returnUrl = SanitizeReturnUrl(req.ReturnUrl, http);
+                var sep = returnUrl.Contains('?') ? '&' : '?';
+                var success = $"{returnUrl}{sep}casco_paid={order.Id:N}";
+                var cancel = $"{returnUrl}{sep}casco_canceled={order.Id:N}";
+                var fail = $"{returnUrl}{sep}casco_failed={order.Id:N}";
+                var intent = await ziina.CreatePaymentIntentAsync(amountMinor, order.Currency, $"طلب #{order.Number}", success, cancel, fail);
+                var payment = new Payment
+                {
+                    UserId = project.OwnerId,
+                    Kind = PaymentKinds.Store,
+                    ProjectId = project.Id,
+                    OrderId = order.Id,
+                    AmountMinor = amountMinor,
+                    Currency = order.Currency,
+                    ProviderPaymentId = intent.Id,
+                    IsTest = ziina.TestMode
+                };
+                order.ProviderPaymentId = intent.Id;
+                db.Payments.Add(payment);
+                await db.SaveChangesAsync();
+                return Results.Ok(new
+                {
+                    order.Id, order.Number, order.Subtotal, order.ShippingFee, order.Total, order.Currency,
+                    status = order.Status, paymentStatus = order.PaymentStatus,
+                    paymentMethod = order.PaymentMethod, paymentLabel = PaymentLabel(order.PaymentMethod),
+                    paymentId = payment.Id, redirectUrl = intent.RedirectUrl
+                });
+            }
+
             var summary = OrderSummary(order, items);
             notifier.Notify(project, SiteEventKind.Order, summary, order.Number);
             return Results.Ok(new
             {
                 order.Id, order.Number, order.Subtotal, order.ShippingFee, order.Total, order.Currency, order.Status,
+                paymentStatus = order.PaymentStatus,
                 paymentMethod = order.PaymentMethod,
                 paymentLabel = PaymentLabel(order.PaymentMethod),
                 bankDetails = order.PaymentMethod == PaymentMethods.BankTransfer ? st.BankDetails : null,
@@ -253,7 +301,7 @@ public static class StoreEndpoints
                 {
                     o.Id, o.Number, o.CustomerName, o.Phone, o.Email, o.Address, o.City, o.Notes, items = Lines(o.ItemsJson),
                     o.Subtotal, o.ShippingFee, o.Total, o.Currency, o.PaymentMethod, paymentLabel = PaymentLabel(o.PaymentMethod),
-                    o.Status, o.CreatedAt, whatsappUrl = SiteContext.WhatsAppLink(o.Phone, $"بخصوص طلبك رقم #{o.Number}")
+                    o.PaymentStatus, o.Status, o.CreatedAt, whatsappUrl = SiteContext.WhatsAppLink(o.Phone, $"بخصوص طلبك رقم #{o.Number}")
                 })
             });
         });
@@ -294,8 +342,24 @@ public static class StoreEndpoints
     private static object PublicOrder(Order o) => new
     {
         o.Id, o.Number, items = Lines(o.ItemsJson), o.Subtotal, o.ShippingFee, o.Total, o.Currency,
-        o.PaymentMethod, paymentLabel = PaymentLabel(o.PaymentMethod), o.Status, o.CreatedAt
+        o.PaymentMethod, paymentLabel = PaymentLabel(o.PaymentMethod), paymentStatus = o.PaymentStatus, o.Status, o.CreatedAt
     };
+
+    private static string SanitizeReturnUrl(string? returnUrl, HttpContext http)
+    {
+        var fallback = $"{http.Request.Scheme}://{http.Request.Host}/";
+        if (string.IsNullOrWhiteSpace(returnUrl)) return fallback;
+        if (!Uri.TryCreate(returnUrl.Trim(), UriKind.Absolute, out var uri)) return fallback;
+        if (uri.Scheme is not ("https" or "http")) return fallback;
+        if (uri.Host.Equals(http.Request.Host.Host, StringComparison.OrdinalIgnoreCase))
+            return uri.GetLeftPart(UriPartial.Path);
+        // Allow the site's own published host (Referer) when the API host differs.
+        var referer = http.Request.Headers.Referer.ToString();
+        if (Uri.TryCreate(referer, UriKind.Absolute, out var refUri)
+            && uri.Host.Equals(refUri.Host, StringComparison.OrdinalIgnoreCase))
+            return uri.GetLeftPart(UriPartial.Path);
+        return fallback;
+    }
 
     public static string OrderSummary(Order o, IEnumerable<OrderLine> items)
     {

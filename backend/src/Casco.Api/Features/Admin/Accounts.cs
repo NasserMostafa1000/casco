@@ -95,7 +95,8 @@ public class AccountsService(AppDbContext db, IOptions<BillingOptions> billing, 
             {
                 subscriptions = Income(PaymentKinds.Subscription),
                 hosting = Income(PaymentKinds.Hosting),
-                topups = Income(PaymentKinds.Topup)
+                topups = Income(PaymentKinds.Topup),
+                store = Income(PaymentKinds.Store)
             },
             entries = lines
         };
