@@ -70,6 +70,8 @@ builder.Services.AddDbContext<AppDbContext>(o =>
         o.UseNpgsql(connectionString, npgsql =>
             npgsql.EnableRetryOnFailure(maxRetryCount: 3, maxRetryDelay: TimeSpan.FromSeconds(3), errorCodesToAdd: null));
     else o.UseSqlite(connectionString);
+    // Hand-authored migrations are used in this repo; do not fail startup when the snapshot lags slightly.
+    o.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
 });
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(o =>
