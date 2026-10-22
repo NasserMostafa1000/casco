@@ -301,6 +301,29 @@ public class AgentTests
     }
 
     [Fact]
+    public void Htm_empty_fragment_blocks_completion()
+    {
+        var broken = """
+            import React from "https://esm.sh/react@19";
+            import htm from "https://esm.sh/htm";
+            const html = htm.bind(React.createElement);
+            export function Header() {
+              return html`<><div class="top">a</div><header>b</header></>`;
+            }
+            """;
+        var ok = broken.Replace("`<><div", "`<div><div").Replace("</header></>`", "</header></div>`");
+        var errors = SiteValidator.Validate(new Dictionary<string, string>
+        {
+            ["index.html"] = "<html></html>",
+            ["assets/ui.js"] = broken
+        }, false);
+        Assert.Contains(errors, e => e.Error.Contains("fragment shorthand") || e.Error.Contains("empty tag"));
+        Assert.DoesNotContain(
+            SiteValidator.Validate(new Dictionary<string, string> { ["index.html"] = "<html></html>", ["assets/ui.js"] = ok }, false),
+            e => e.Error.Contains("fragment") || e.Error.Contains("empty tag"));
+    }
+
+    [Fact]
     public void Repair_closes_void_tags_and_converts_style_strings()
     {
         var files = new Dictionary<string, string>

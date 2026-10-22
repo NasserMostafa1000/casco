@@ -354,10 +354,29 @@ public static partial class SiteValidator
                 errors.Add((path, $"{path} is packed onto too few lines. Rewrite it with a newline after every statement. A minified file hides the error that leaves the page white."));
             if (JavaScriptSyntax(content) is { } syntax)
                 errors.Add((path, $"{path} has a JavaScript syntax error ({syntax}). The page stays white until this is fixed."));
+            // htm treats <> as createElement('') which throws InvalidCharacterError and blanks the page.
+            // JSX fragment shorthand is not valid in htm — use React.Fragment or a single wrapper element.
+            if (content.Contains("esm.sh/htm", StringComparison.Ordinal) && HtmEmptyFragment().IsMatch(content))
+                errors.Add((path, $"{path} uses htm fragment shorthand <>...</> which crashes in the browser (empty tag name). Use <${{React.Fragment}}>…</${{React.Fragment}}> or wrap siblings in one <div>."));
+            if (LooksJsonEscaped(content))
+                errors.Add((path, $"{path} looks JSON-escaped (literal \\u003C / \\u0022). Write the real file text with normal quotes and tags, not escape sequences."));
+        }
+        foreach (var (path, content) in files.Where(f => SiteFiles.IsHtml(f.Key)))
+        {
+            if (LooksJsonEscaped(content))
+                errors.Add((path, $"{path} looks JSON-escaped (literal \\u003C). Write real HTML, not escape sequences."));
         }
         ValidateBackend(files, errors);
         return errors.DistinctBy(e => e.Item2).ToList();
     }
+
+    [GeneratedRegex(@"html\s*`[^`]*<>", RegexOptions.Singleline)]
+    private static partial Regex HtmEmptyFragment();
+
+    /// <summary>True when file body still contains JSON unicode escapes instead of real characters.</summary>
+    private static bool LooksJsonEscaped(string content) =>
+        content.Contains("\\u003C", StringComparison.Ordinal) || content.Contains("\\u003c", StringComparison.Ordinal)
+        || content.Contains("\\u0022", StringComparison.Ordinal) || content.Contains("\\u0027", StringComparison.Ordinal);
 
     private static readonly Regex ImportLine = new(@"^\s*import\s.+;?\s*$", RegexOptions.Multiline | RegexOptions.Compiled);
 
