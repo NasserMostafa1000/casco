@@ -16,18 +16,29 @@ public static class AlRasikhoonEndpoints
     public const string ProjectId = "al-rasikhoon";
 
     const string SystemPrompt = """
-        أنت Ask AI الرسمي لشركة الراسخون العقارية (Al Rasikhoon Real Estate).
-        رد بنفس لغة سؤال المستخدم (عربي أو إنجليزي) بجمل قصيرة واضحة.
+        أنت KPH، مساعد Ask AI الرسمي لشركة الراسخون العقارية (Al Rasikhoon Real Estate)، وتعمل عبر باك إند Casco مع نماذج OpenAI.
+
+        أسلوب الرد (مهم جداً):
+        - تكلم بطبيعية كموظف خدمة عملاء ذكي، مش روبوت يكرر نفس الفقرة.
+        - جاوب على سؤال المستخدم مباشرة أولاً، ثم أضف معلومة مفيدة قصيرة فقط إذا لزمت.
+        - ممنوع تكرار نفس مقدمة الشركة في كل رد.
+        - رد بنفس لغة السؤال (عربي فصيح واضح أو إنجليزي بسيط).
+        - لو السؤال خارج نطاق الشركة أو الموقع، اعتذر بلطف وارجع لموضوع الراسخون أو برج الوطن.
+
+        من برمج هذا الموقع؟
+        - المطوّر: ناصر مصطفى (Nasser Mostafa).
+        - بنى الموقع ووكيل KPH كعرض قدرات لفرصة عمل في الراسخون، ودمجه عبر Casco.
+        - لو سألو عن المبرمج / مطور الموقع / من عمل الموقع: اذكر ناصر مصطفى بوضوح.
 
         معلومات الشركة:
-        - تأسست في دبي 10 يونيو 2002، ومقرها الرئيسي: شارع الشيخ خليفة بن زايد، النعيمية 1، عجمان
+        - تأسست 10 يونيو 2002، المقر: شارع الشيخ خليفة بن زايد، النعيمية 1، عجمان
         - هاتف مجاني: 8005454 / +971 800 5454 · واتساب: https://wa.me/9718005454
         - إيميل: info@alrasikhoon.ae · وظائف: careers@alrasikhoon.ae
         - تقييم 5+ نجوم من دائرة الأراضي والتنظيم العقاري بعجمان
         - رخصة 51148 · قيد 19 · تصريح AJRE2210
         - السوشيال: Instagram @alrasikhoon.ae · Facebook alrasikhoon.ae · X @alrasikhoon · YouTube · LinkedIn · TikTok @alrasikhoon.ae · Telegram t.me/alrasikhhon · Threads · Linktree linktr.ee/alrasikhoon
 
-        قيادة عامة معروفة:
+        قيادة معروفة:
         - خليفة سلطان بن حارب المهيري: المالك والمدير العام
         - د. كريم أبو شليح: مدير المبيعات
         - حسام عوض: مدير المالية والإدارة
@@ -38,7 +49,7 @@ public static class AlRasikhoonEndpoints
 
         برج الوطن: تملك حر، نحو 48 طابقاً (39 سكني + مواقف + مرافق)، استوديو من ~460 ألف درهم، 1BR من ~838 ألف، 2BR من ~1.35 مليون، 3BR من ~2.25 مليون، تسليم معلن Q4 2028 تقريباً. مطور KBH مع تسويق الراسخون.
 
-        لا تختلق موظفين أو أسعار خارج ما سبق إن لم يُذكر. وجّه التواصل لـ 8005454 أو واتساب.
+        لا تختلق موظفين أو أسعار خارج ما سبق. وجّه التواصل لـ 8005454 أو واتساب عند الحاجة للحجز أو البيانات الرسمية.
         """;
 
     static readonly JsonSerializerOptions JsonOpts = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
@@ -220,12 +231,12 @@ public static class AlRasikhoonEndpoints
 
             var reply = (result.Content ?? "").Trim();
             if (string.IsNullOrEmpty(reply))
-                reply = FallbackCompany(lang);
+                reply = FallbackCompany(message, lang);
             return new PackedReply(thinking, reply, []);
         }
         catch
         {
-            return new PackedReply(thinking, FallbackCompany(lang), []);
+            return new PackedReply(thinking, FallbackCompany(message, lang), []);
         }
     }
 
@@ -384,10 +395,31 @@ public static class AlRasikhoonEndpoints
         return Regex.IsMatch(message, "[\u0600-\u06FF]") ? "ar" : "en";
     }
 
-    static string FallbackCompany(string lang) =>
-        lang == "en"
-            ? "Al Rasikhoon Real Estate — founded 10 June 2002. Main office: Khalifa Bin Zayed St, Al Nuaimia 1, Ajman. Call 8005454 · info@alrasikhoon.ae · Instagram @alrasikhoon.ae"
-            : "الراسخون العقارية — تأسست 10 يونيو 2002. المكتب: شارع خليفة بن زايد، النعيمية 1، عجمان. اتصل 8005454 · info@alrasikhoon.ae · إنستغرام @alrasikhoon.ae";
+    static string FallbackCompany(string message, string lang)
+    {
+        var lower = message.ToLowerInvariant();
+        if (Regex.IsMatch(lower, @"مبرمج|مطور|مطوّر|programmer|developer|who (built|made|coded|developed)|من (عمل|صنع|برمج|بنى|بني)|مين (عمل|برمج)"))
+        {
+            return lang == "en"
+                ? "This site was built by Nasser Mostafa as a capability demo for Al Rasikhoon, with the KPH agent wired through Casco."
+                : "مبرمج الموقع هو ناصر مصطفى. عمله كعرض قدرات للراسخون مع وكيل KPH عبر Casco.";
+        }
+        if (Regex.IsMatch(lower, @"تفهم عربي|بتفهم عربي|Understand arabic|speak arabic|عربي ولا", RegexOptions.IgnoreCase))
+        {
+            return lang == "en"
+                ? "Yes — I understand Arabic and English. Ask anything about Al Rasikhoon or Al Watan Tower."
+                : "أيوه، بفهم عربي وإنجليزي. اسأل عن الراسخون أو برج الوطن وأرد بنفس لغة سؤالك.";
+        }
+        if (Regex.IsMatch(lower, @"تواصل|contact|هاتف|phone|واتس|whatsapp|ايميل|email", RegexOptions.IgnoreCase))
+        {
+            return lang == "en"
+                ? "Call 8005454 · WhatsApp https://wa.me/9718005454 · info@alrasikhoon.ae · Khalifa Bin Zayed St, Al Nuaimia 1, Ajman."
+                : "تواصل: 8005454 · واتساب https://wa.me/9718005454 · info@alrasikhoon.ae · النعيمية 1، عجمان.";
+        }
+        return lang == "en"
+            ? "Tell me what you need: Al Watan prices, a project, contacts, the team, or who built this site — and I’ll answer directly."
+            : "قولي بالتحديد: أسعار برج الوطن، مشروع معيّن، تواصل، الفريق، أو مين برمج الموقع — وأجاوبك مباشرة.";
+    }
 
     static string TypeAr(string type) => type switch
     {
