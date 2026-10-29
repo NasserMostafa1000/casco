@@ -5,6 +5,7 @@ using Casco.Api.Domain;
 using Casco.Api.Features.Admin;
 using Casco.Api.Features.Ardh;
 using Casco.Api.Features.Ary;
+using Casco.Api.Features.Rasikhoon;
 using Casco.Api.Features.Agent;
 using Casco.Api.Features.Ai;
 using Casco.Api.Features.Auth;
@@ -351,6 +352,7 @@ app.MapBookingEndpoints();
 app.MapAdminEndpoints();
 app.MapAryFood();
 app.MapArdhAlMusk();
+app.MapAlRasikhoon();
 UploadService.MapUploadFiles(app);
 StockImages.Map(app);
 app.MapGet("/api/templates", (TemplateCatalog templates) =>
