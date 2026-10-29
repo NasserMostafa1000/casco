@@ -205,11 +205,11 @@ public static class AlRasikhoonEndpoints
     static async Task<PackedReply> BuildReplyAsync(AiClient ai, string message, string lang, CancellationToken ct)
     {
         var intent = DetectIntent(message);
-        var thinking = BuildDummyThinking(message, intent, lang);
         var matches = MatchApartments(intent);
 
         if (intent.IsApartmentQuery)
         {
+            var thinking = BuildApartmentThinking(message, intent, lang);
             var answer = BuildApartmentAnswer(intent, matches, lang);
             var cards = matches.Take(4).Select(ToCard).ToList();
             return new PackedReply(thinking, answer, cards);
@@ -221,59 +221,142 @@ public static class AlRasikhoonEndpoints
                 AiTiers.Cheap,
                 new ChatRequest(
                     [
-                        new("system", SystemPrompt),
+                        new("system", SystemPrompt + """
+
+                            صيغة الإخراج الإلزامية — JSON فقط بدون markdown:
+                            {"thinking":"...","answer":"..."}
+                            - thinking: 2 إلى 4 جمل قصيرة توضّح كيف تفهم سؤال الزائر الحالي تحديداً (اذكر موضوع سؤاله)، ثم ماذا ستراجع قبل الرد. ممنوع قالب عام ثابت، وممنوع نسخ نفس التفكير في كل مرة.
+                            - answer: الرد النهائي للزائر بنفس لغة سؤاله، طبيعي ومباشر.
+                            """),
                         new("user", message),
                     ],
-                    MaxOutputTokens: 700,
-                    Json: false),
+                    MaxOutputTokens: 900,
+                    Json: true),
                 new AiCallContext(null, null, null, "rasikhoon-ask", "public"),
                 ct);
 
-            var reply = (result.Content ?? "").Trim();
-            if (string.IsNullOrEmpty(reply))
-                reply = FallbackCompany(message, lang);
-            return new PackedReply(thinking, reply, []);
+            if (TryParseAiPacket(result.Content, lang, out var thinking, out var answer))
+                return new PackedReply(thinking, answer, []);
+
+            var fallbackAnswer = (result.Content ?? "").Trim();
+            if (string.IsNullOrEmpty(fallbackAnswer))
+                fallbackAnswer = FallbackCompany(message, lang);
+            return new PackedReply(BuildTopicThinking(message, lang), fallbackAnswer, []);
         }
         catch
         {
-            return new PackedReply(thinking, FallbackCompany(message, lang), []);
+            return new PackedReply(BuildTopicThinking(message, lang), FallbackCompany(message, lang), []);
         }
     }
 
-    static string BuildDummyThinking(string _message, Intent intent, string lang)
+    static bool TryParseAiPacket(string? content, string lang, out string thinking, out string answer)
+    {
+        thinking = "";
+        answer = "";
+        if (string.IsNullOrWhiteSpace(content)) return false;
+        var raw = content.Trim();
+        var start = raw.IndexOf('{');
+        var end = raw.LastIndexOf('}');
+        if (start < 0 || end <= start) return false;
+        try
+        {
+            using var doc = JsonDocument.Parse(raw[start..(end + 1)]);
+            var root = doc.RootElement;
+            thinking = root.TryGetProperty("thinking", out var t) ? (t.GetString() ?? "").Trim() : "";
+            answer = root.TryGetProperty("answer", out var a) ? (a.GetString() ?? "").Trim() : "";
+            if (string.IsNullOrEmpty(answer)) return false;
+            if (string.IsNullOrEmpty(thinking))
+                thinking = lang == "en"
+                    ? "Understanding this specific visitor question, then drafting a direct reply."
+                    : "أفهم سؤال الزائر الحالي تحديداً، ثم أصيغ رداً مباشراً.";
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    static string Snip(string message, int max = 90)
+    {
+        var one = Regex.Replace(message.Trim(), @"\s+", " ");
+        if (one.Length <= max) return one;
+        return one[..(max - 1)] + "…";
+    }
+
+    static string BuildApartmentThinking(string message, Intent intent, string lang)
     {
         if (lang == "en")
         {
             var lines = new List<string>
             {
-                "Reading the visitor message and detecting language…",
-                $"Query focus: {(intent.IsApartmentQuery ? "unit search in Al Watan Tower" : "company / general enquiry")}.",
+                $"Visitor asked: \"{Snip(message)}\".",
+                "This looks like an Al Watan Tower unit search.",
             };
             if (intent.Budget is not null)
-                lines.Add($"Budget signal detected around AED {intent.Budget:N0}.");
+                lines.Add($"Budget cue around AED {intent.Budget:N0}.");
             if (intent.Type is not null)
-                lines.Add($"Preferred unit type: {intent.Type}.");
+                lines.Add($"Unit type cue: {intent.Type}.");
             if (intent.Floor is not null)
-                lines.Add($"Floor preference: {intent.Floor}.");
-            lines.Add("Checking Al Rasikhoon knowledge + dummy Al Watan inventory…");
-            lines.Add("Preparing a clear reply in English.");
+                lines.Add($"Floor cue: {intent.Floor}.");
+            lines.Add("Matching demo inventory and preparing unit cards.");
             return string.Join(" ", lines);
         }
 
         var ar = new List<string>
         {
-            "أقرأ رسالة الزائر وأحدد اللغة…",
-            $"محور السؤال: {(intent.IsApartmentQuery ? "بحث وحدة في برج الوطن" : "استفسار عن الشركة / معلومات عامة")}.",
+            $"الزائر سأل: \"{Snip(message)}\".",
+            "يبدو بحث وحدة في برج الوطن.",
         };
         if (intent.Budget is not null)
             ar.Add($"إشارة ميزانية حوالي {intent.Budget:N0} درهم.");
         if (intent.Type is not null)
-            ar.Add($"نوع الوحدة المفضّل: {TypeAr(intent.Type)}.");
+            ar.Add($"نوع الوحدة: {TypeAr(intent.Type)}.");
         if (intent.Floor is not null)
             ar.Add($"تفضيل الطابق: {intent.Floor}.");
-        ar.Add("أراجع معرفة الراسخون ومخزون برج الوطن الافتراضي…");
-        ar.Add("أجهّز رداً واضحاً بالعربية.");
+        ar.Add("أطابق المخزون التجريبي وأجهّز بطاقات الوحدات.");
         return string.Join(" ", ar);
+    }
+
+    static string BuildTopicThinking(string message, string lang)
+    {
+        var lower = message.ToLowerInvariant();
+        var topicEn = "general company enquiry";
+        var topicAr = "استفسار عام عن الشركة";
+        if (Regex.IsMatch(lower, @"مبرمج|مطور|مطوّر|programmer|developer|who (built|made|coded)|من (عمل|صنع|برمج)|مين (عمل|برمج)"))
+        {
+            topicEn = "who built / programmed this website";
+            topicAr = "من برمج أو طوّر هذا الموقع";
+        }
+        else if (Regex.IsMatch(lower, @"تفهم عربي|بتفهم عربي|understand arabic|speak arabic|عربي ولا", RegexOptions.IgnoreCase))
+        {
+            topicEn = "whether the assistant understands Arabic";
+            topicAr = "هل المساعد يفهم العربية";
+        }
+        else if (Regex.IsMatch(lower, @"تواصل|contact|هاتف|phone|واتس|whatsapp|ايميل|email", RegexOptions.IgnoreCase))
+        {
+            topicEn = "company contact channels";
+            topicAr = "وسائل التواصل مع الشركة";
+        }
+        else if (Regex.IsMatch(lower, @"موظف|team|adel|عادل|كريم|حسام|خليفة|توظيف|recruit", RegexOptions.IgnoreCase))
+        {
+            topicEn = "team / recruitment people";
+            topicAr = "الفريق أو التوظيف";
+        }
+        else if (Regex.IsMatch(lower, @"وطن|watan|tower|برج", RegexOptions.IgnoreCase))
+        {
+            topicEn = "Al Watan Tower details";
+            topicAr = "تفاصيل برج الوطن";
+        }
+        else if (Regex.IsMatch(lower, @"مشروع|project|قاسمية|سدر|صجعة", RegexOptions.IgnoreCase))
+        {
+            topicEn = "Al Rasikhoon projects";
+            topicAr = "مشاريع الراسخون";
+        }
+
+        return lang == "en"
+            ? $"Visitor asked: \"{Snip(message)}\". Topic: {topicEn}. Pull only the facts needed for this question and answer directly."
+            : $"الزائر سأل: \"{Snip(message)}\". الموضوع: {topicAr}. أراجع فقط ما يلزم لهذا السؤال وأرد مباشرة.";
     }
 
     static string BuildApartmentAnswer(Intent intent, List<AptSeed> matches, string lang)
